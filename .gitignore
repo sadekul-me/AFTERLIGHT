@@ -75,6 +75,10 @@ Desktop.ini
 *.bak
 *~
 
+# Editor per-user content (not project assets)
+Content/Developers/
+Content/Collections/
+
 # Python local
 __pycache__/
 *.pyc
