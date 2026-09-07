@@ -42,6 +42,12 @@ AFTERLIGHT is a premium cinematic narrative sci-fi/cyberpunk game.
 
 See `docs/implementation/cinematic-camera-spike.md` for the camera authority model.
 
+## Vertical slice (design only)
+
+Narrative package for the first 7–9 minute playable-cinema slice lives under `docs/narrative/` and `docs/production/`. It is **not implemented** in Unreal yet. Do not treat `L_Dev_CinematicLab` as the story map.
+
+Start: `docs/narrative/vertical-slice-story-bible.md`
+
 ## Intentionally not implemented
 
 MetaHuman, final characters, screenplay, combat, inventory, GAS/Lyra, World Partition, multiplayer, Wwise/FMOD, city packs, full five-axis relationship model, final MRQ.
