@@ -41,6 +41,15 @@ struct AFTERLIGHT_API FAfterlightDialogueNode
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Afterlight")
 	TArray<FAfterlightDialogueChoice> Choices;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Afterlight")
+	FName NextNodeId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Afterlight")
+	float AutoAdvanceSeconds = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Afterlight")
+	bool bKeepGameplayInput = false;
 };
 
 USTRUCT(BlueprintType)

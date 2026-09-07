@@ -21,9 +21,11 @@ public:
 	void Start(UAfterlightDialogueAsset* Asset);
 	void StartGraph(const TArray<FAfterlightDialogueNode>& Nodes, FName EntryNodeId);
 	bool SelectChoice(int32 ChoiceIndex);
+	bool Advance();
 	void Abort();
 	bool IsActive() const { return bActive; }
 	const FAfterlightDialogueNode* GetCurrentNode() const { return CurrentNode; }
+	bool ShouldKeepGameplayInput() const { return CurrentNode && CurrentNode->bKeepGameplayInput; }
 
 	UPROPERTY(BlueprintAssignable)
 	FAfterlightDialogueLine OnLinePresented;

@@ -41,12 +41,46 @@ void UAfterlightDialogueRunner::PresentNode(const FAfterlightDialogueNode& Node)
 	CurrentNode = &Node;
 	OnLinePresented.Broadcast(Node.SpeakerId, Node.Line);
 	OnChoicesPresented.Broadcast(Node.Choices);
-	if (Node.Choices.Num() == 0)
+	if (Node.Choices.Num() > 0)
+	{
+		return;
+	}
+	if (!Node.NextNodeId.IsNone())
+	{
+		return;
+	}
+	bActive = false;
+	CurrentNode = nullptr;
+	OnFinished.Broadcast();
+}
+
+bool UAfterlightDialogueRunner::Advance()
+{
+	if (!bActive || !CurrentNode)
+	{
+		return false;
+	}
+	if (CurrentNode->Choices.Num() > 0)
+	{
+		return false;
+	}
+	const FName NextId = CurrentNode->NextNodeId;
+	if (NextId.IsNone())
 	{
 		bActive = false;
 		CurrentNode = nullptr;
 		OnFinished.Broadcast();
+		return true;
 	}
+	if (const FAfterlightDialogueNode* Next = FindRuntimeNode(NextId))
+	{
+		PresentNode(*Next);
+		return true;
+	}
+	bActive = false;
+	CurrentNode = nullptr;
+	OnFinished.Broadcast();
+	return true;
 }
 
 bool UAfterlightDialogueRunner::SelectChoice(int32 ChoiceIndex)

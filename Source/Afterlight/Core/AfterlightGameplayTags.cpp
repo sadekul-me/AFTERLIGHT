@@ -19,6 +19,18 @@ namespace AfterlightTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Test_MetCompanion, "Story.Test.MetCompanion", "Technical-lab: talked to companion");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Test_InspectedObject, "Story.Test.InspectedObject", "Technical-lab: inspected world object");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_Woke, "Story.Slice01.Woke", "Slice01: wake completed");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_MetMaya, "Story.Slice01.MetMaya", "Slice01: first Maya contact");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_ChoseFollow, "Story.Slice01.ChoseFollow", "Slice01: chose Walk");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_ChoseQuestion, "Story.Slice01.ChoseQuestion", "Slice01: chose to question Maya");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_EnteredCut, "Story.Slice01.EnteredCut", "Slice01: entered Lantern Cut");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_SweepPassed, "Story.Slice01.SweepPassed", "Slice01: lantern-drone sweep passed");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_ReachedBolt, "Story.Slice01.ReachedBolt", "Slice01: entered Pump House 12");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_QuietBeat, "Story.Slice01.QuietBeat", "Slice01: quiet mug beat done");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_FoundTin, "Story.Slice01.FoundTin", "Slice01: tin inspected");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_HeardWarning, "Story.Slice01.HeardWarning", "Slice01: warning playback finished");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Story_Slice01_Complete, "Story.Slice01.Complete", "Slice01: title reached");
+
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Relationship_Trust_High, "Relationship.Trust.High", "Trust at or above high threshold");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Relationship_Trust_Low, "Relationship.Trust.Low", "Trust at or below low threshold");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Relationship_Suspicion_High, "Relationship.Suspicion.High", "Suspicion at or above high threshold");

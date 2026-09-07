@@ -37,6 +37,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
 	void HideDialogue();
 
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
+	void ShowTitle(const FText& Text);
+
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
+	void HideTitle();
+
 	UAfterlightHUDWidget* GetWidget() const { return Widget; }
 
 private:

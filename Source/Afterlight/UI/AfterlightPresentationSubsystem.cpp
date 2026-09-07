@@ -135,3 +135,20 @@ void UAfterlightPresentationSubsystem::HideDialogue()
 		Widget->HideDialogue();
 	}
 }
+
+void UAfterlightPresentationSubsystem::ShowTitle(const FText& Text)
+{
+	EnsureWidget();
+	if (Widget)
+	{
+		Widget->SetTitle(Text);
+	}
+}
+
+void UAfterlightPresentationSubsystem::HideTitle()
+{
+	if (Widget)
+	{
+		Widget->HideTitle();
+	}
+}

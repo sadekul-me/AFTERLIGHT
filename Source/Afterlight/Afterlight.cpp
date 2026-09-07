@@ -1,5 +1,6 @@
 #include "Afterlight.h"
 #include "Cinematic/AfterlightLabDirector.h"
+#include "Slice/AfterlightSlice01Director.h"
 #include "Camera/AfterlightCameraSubsystem.h"
 #include "Cinematic/AfterlightCinematicCoordinator.h"
 #include "EngineUtils.h"
@@ -133,6 +134,51 @@ static FAutoConsoleCommand AfterlightCameraCycleCommand(
 			if (UAfterlightCameraSubsystem* Camera = World->GetSubsystem<UAfterlightCameraSubsystem>())
 			{
 				Camera->CycleDebugShot();
+			}
+		});
+	}));
+
+static FAutoConsoleCommand AfterlightResetSliceCommand(
+	TEXT("Afterlight.ResetSlice"),
+	TEXT("Reset AFTERLIGHT Slice01 narrative and relationship state."),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		AfterlightForEachWorld([](UWorld* World)
+		{
+			for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+			{
+				It->ResetSlice();
+			}
+		});
+	}));
+
+static FAutoConsoleCommand AfterlightSliceJumpCommand(
+	TEXT("Afterlight.Slice01.Jump"),
+	TEXT("Jump Slice01 debug checkpoint: Wake, Choice, Sweep, Quiet, Warning."),
+	FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+	{
+		const FName Checkpoint = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("Wake"));
+		AfterlightForEachWorld([&Checkpoint](UWorld* World)
+		{
+			for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+			{
+				It->JumpCheckpoint(Checkpoint);
+			}
+		});
+	}));
+
+static FAutoConsoleCommand AfterlightSmokeSliceCommand(
+	TEXT("Afterlight.SmokeSlice01"),
+	TEXT("Run the AFTERLIGHT Slice01 greybox smoke (choice, sweep, tin, warning, title)."),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		AfterlightForEachWorld([](UWorld* World)
+		{
+			for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+			{
+				FString Report;
+				const bool bOk = It->RunSliceSmoke(Report);
+				UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_SLICE_SMOKE=%s\n%s"), bOk ? TEXT("PASS") : TEXT("FAIL"), *Report);
 			}
 		});
 	}));

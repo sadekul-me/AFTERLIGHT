@@ -3,6 +3,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"
 #include "Character/AfterlightPlayerController.h"
 #include "Core/AfterlightPlayerContextSubsystem.h"
 #include "Narrative/AfterlightNarrativeSubsystem.h"
@@ -82,6 +83,36 @@ TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 			DebugSlot->SetAutoSize(true);
 		}
 		DebugBlock = Debug;
+	}
+	if (!TitleScrim.IsValid())
+	{
+		UImage* Scrim = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("TitleScrim"));
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::Box;
+		Brush.TintColor = FSlateColor(FLinearColor::Black);
+		Scrim->SetBrush(Brush);
+		Scrim->SetColorAndOpacity(FLinearColor::Black);
+		if (UCanvasPanelSlot* ScrimSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Scrim))
+		{
+			ScrimSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+			ScrimSlot->SetOffsets(FMargin(0.f));
+			ScrimSlot->SetZOrder(20);
+		}
+		Scrim->SetVisibility(ESlateVisibility::Hidden);
+		TitleScrim = Scrim;
+	}
+	if (!TitleBlock.IsValid())
+	{
+		UTextBlock* Title = MakeText(TEXT("Title"), FLinearColor(0.95f, 0.93f, 0.88f), 42);
+		if (UCanvasPanelSlot* TitleSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Title))
+		{
+			TitleSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+			TitleSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+			TitleSlot->SetAutoSize(true);
+			TitleSlot->SetZOrder(21);
+		}
+		Title->SetVisibility(ESlateVisibility::Hidden);
+		TitleBlock = Title;
 	}
 
 	return Super::RebuildWidget();
@@ -164,6 +195,26 @@ void UAfterlightHUDWidget::SetDebugVisible(bool bVisible)
 	{
 		DebugBlock->SetVisibility((!bVisible || bCineMode) ? ESlateVisibility::Hidden : ESlateVisibility::HitTestInvisible);
 	}
+}
+
+void UAfterlightHUDWidget::SetTitle(const FText& Text)
+{
+	const bool bShow = !Text.IsEmpty();
+	if (TitleScrim.IsValid())
+	{
+		TitleScrim->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+	}
+	if (!TitleBlock.IsValid())
+	{
+		return;
+	}
+	TitleBlock->SetText(Text);
+	TitleBlock->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+}
+
+void UAfterlightHUDWidget::HideTitle()
+{
+	SetTitle(FText::GetEmpty());
 }
 
 void UAfterlightHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)

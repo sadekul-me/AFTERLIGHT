@@ -33,6 +33,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Afterlight")
 	FGameplayTag GrantFlag;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Afterlight")
+	FGameplayTag RequiredFlag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Afterlight")
+	FGameplayTag BlockedFlag;
+
 	UPROPERTY(BlueprintAssignable, Category = "Afterlight")
 	FAfterlightInteracted OnInteracted;
 };

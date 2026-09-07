@@ -13,4 +13,5 @@ class AFTERLIGHT_API UAfterlightLevelSequenceFactory : public UObject
 
 public:
 	static ULevelSequence* CreateInspectRevealSequence(UObject* Outer, ACineCameraActor* RevealCamera, float DurationSeconds = 3.f);
+	static ULevelSequence* CreateWarningSequence(UObject* Outer, ACineCameraActor* SlateCamera, float DurationSeconds = 18.f);
 };

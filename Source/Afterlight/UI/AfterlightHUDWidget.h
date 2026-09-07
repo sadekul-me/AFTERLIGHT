@@ -5,6 +5,7 @@
 #include "AfterlightHUDWidget.generated.h"
 
 class UTextBlock;
+class UImage;
 class UVerticalBox;
 
 UCLASS()
@@ -19,6 +20,8 @@ public:
 	void HideDialogue();
 	void SetDebugText(const FText& Text);
 	void SetDebugVisible(bool bVisible);
+	void SetTitle(const FText& Text);
+	void HideTitle();
 	bool IsDialogueVisible() const { return bDialogueVisible; }
 
 protected:
@@ -32,6 +35,8 @@ private:
 	TWeakObjectPtr<UTextBlock> DialogueBlock;
 	TWeakObjectPtr<UTextBlock> ChoiceBlock;
 	TWeakObjectPtr<UTextBlock> DebugBlock;
+	TWeakObjectPtr<UTextBlock> TitleBlock;
+	TWeakObjectPtr<UImage> TitleScrim;
 
 	bool bCineMode = false;
 	bool bDialogueVisible = false;
