@@ -33,6 +33,8 @@ crashinfo.txt
 
 # Generated Visual Studio / Unreal solution files
 *.sln
+*.slnx
+.vsconfig
 *.sln.docstates
 *.suo
 *.user

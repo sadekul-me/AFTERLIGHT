@@ -1,0 +1,32 @@
+#pragma once
+
+#include "NativeGameplayTags.h"
+
+namespace AfterlightTags
+{
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Explore);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Dialogue);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Threat);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Cinematic);
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Full);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Constrained);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Locked);
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cinematic_Active);
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Story_Test_MetCompanion);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Story_Test_InspectedObject);
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Relationship_Trust_High);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Relationship_Trust_Low);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Relationship_Suspicion_High);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Relationship_Suspicion_Low);
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Companion_Follow_Close);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Companion_Follow_Far);
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interaction_Talk);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interaction_Inspect);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interaction_Use);
+}
