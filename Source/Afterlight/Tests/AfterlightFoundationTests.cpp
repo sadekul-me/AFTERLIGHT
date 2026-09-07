@@ -6,6 +6,8 @@
 #include "Narrative/AfterlightDialogueRunner.h"
 #include "Core/AfterlightGameplayTags.h"
 #include "Camera/AfterlightCameraRecipe.h"
+#include "Cinematic/AfterlightCinematicSession.h"
+#include "Character/AfterlightPlayerController.h"
 
 #if WITH_AUTOMATION_TESTS
 
@@ -102,6 +104,58 @@ bool FAfterlightCameraRegisterNameTest::RunTest(const FString& Parameters)
 {
 	TestEqual(TEXT("Explore name"), AfterlightRegisterToName(EAfterlightCameraRegister::Explore), FName(TEXT("Explore")));
 	TestEqual(TEXT("Dialogue name"), AfterlightRegisterToName(EAfterlightCameraRegister::Dialogue), FName(TEXT("Dialogue")));
+	TestEqual(TEXT("Intimate name"), AfterlightRegisterToName(EAfterlightCameraRegister::Intimate), FName(TEXT("Intimate")));
+	TestEqual(TEXT("Reveal name"), AfterlightRegisterToName(EAfterlightCameraRegister::Reveal), FName(TEXT("Reveal")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightCameraUnknownRegisterFallbackTest, "Afterlight.Camera.UnknownRegisterFallback", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightCameraUnknownRegisterFallbackTest::RunTest(const FString& Parameters)
+{
+	TestFalse(TEXT("Unknown name is not known"), AfterlightIsKnownRegisterName(TEXT("MayaHeroCloseup")));
+	TestEqual(TEXT("Unknown falls back to Explore"), AfterlightRegisterFromName(TEXT("MayaHeroCloseup")), EAfterlightCameraRegister::Explore);
+	TestTrue(TEXT("Dialogue is known"), AfterlightIsKnownRegisterName(TEXT("Dialogue")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightCinematicSessionOwnershipTest, "Afterlight.Camera.CinematicSessionOwnership", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightCinematicSessionOwnershipTest::RunTest(const FString& Parameters)
+{
+	FAfterlightCinematicSession Session;
+	TestFalse(TEXT("Idle session is inactive"), Session.bActive);
+	Session.Begin(TEXT("LS_LabInspectReveal"), EAfterlightCameraRegister::Explore);
+	TestTrue(TEXT("Request activates session"), Session.bActive);
+	TestEqual(TEXT("Sequence name stored"), Session.SequenceName, FName(TEXT("LS_LabInspectReveal")));
+	TestEqual(TEXT("Return register stored"), Session.ReturnRegister, EAfterlightCameraRegister::Explore);
+	TestEqual(TEXT("Authority is Sequencer"), Session.Authority, EAfterlightCameraAuthority::Sequencer);
+	TestTrue(TEXT("Complete succeeds while active"), Session.Complete());
+	TestFalse(TEXT("Complete clears active"), Session.bActive);
+	TestTrue(TEXT("Sequence name cleared"), Session.SequenceName.IsNone());
+	TestFalse(TEXT("Second complete is safe"), Session.Complete());
+	Session.Begin(TEXT("LS_Cancel"), EAfterlightCameraRegister::Dialogue);
+	TestTrue(TEXT("Cancel succeeds"), Session.Cancel());
+	TestFalse(TEXT("Cancel leaves inactive"), Session.bActive);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightCameraRecipeDefaultsTest, "Afterlight.Camera.RecipeDefaults", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightCameraRecipeDefaultsTest::RunTest(const FString& Parameters)
+{
+	UAfterlightCameraRecipe* Dialogue = UAfterlightCameraRecipe::CreateDefault(GetTransientPackage(), EAfterlightCameraRegister::Dialogue);
+	UAfterlightCameraRecipe* Explore = UAfterlightCameraRecipe::CreateDefault(GetTransientPackage(), EAfterlightCameraRegister::Explore);
+	TestTrue(TEXT("Dialogue recipe created"), Dialogue != nullptr);
+	TestTrue(TEXT("Dialogue uses target focus"), Dialogue && Dialogue->FocusMode == EAfterlightCameraFocusMode::Target);
+	TestTrue(TEXT("Explore keeps gameplay FOV cinematic"), Explore && Explore->GameplayFOV < 70.f);
+	TestTrue(TEXT("Explore blend is not instant"), Explore && Explore->BlendTime >= 0.5f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightInputStateDistinctTest, "Afterlight.Camera.InputStates", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightInputStateDistinctTest::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("Scripted is distinct from Locked"), EAfterlightInputState::Scripted != EAfterlightInputState::Locked);
+	TestTrue(TEXT("Constrained is distinct from Full"), EAfterlightInputState::Constrained != EAfterlightInputState::Full);
+	TestTrue(TEXT("Four input states exist"), static_cast<uint8>(EAfterlightInputState::Scripted) == 3);
 	return true;
 }
 

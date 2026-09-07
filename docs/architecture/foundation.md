@@ -20,7 +20,7 @@ AFTERLIGHT is a premium cinematic narrative sci-fi/cyberpunk game.
 | C++ | Rules, state, save, narrative verbs, relationship math, camera policy, interaction, debug |
 | Data assets | Beats, dialogue graphs, camera recipes (placeholder graphs currently constructed in C++) |
 | Blueprint / UMG | Presentation widgets (C++ `UAfterlightHUDWidget` until authored WBPs exist) |
-| Sequencer | Future cinematic authority; coordinator API is ready |
+| Sequencer | Technical inspect Level Sequence via cinematic coordinator; recipes/shots remain C++ until authored assets exist |
 
 **Content knows plot. Code knows verbs.**
 
@@ -33,11 +33,14 @@ AFTERLIGHT is a premium cinematic narrative sci-fi/cyberpunk game.
 - Generic companion character (look-at, follow-distance presentation hooks; Trust high → close, Suspicion high → far)
 - Narrative flags + beat evaluation + dialogue runner
 - Relationship axes: **Trust**, **Suspicion** (hidden; debug overlay only)
-- Thin camera registers: Explore / Dialogue / Cinematic / Threat
-- Cinematic coordinator: request control → lock input → change register → release
+- Thin camera registers: Explore / Dialogue / Intimate / Reveal / Threat / Cinematic
+- Data-driven camera recipes + reusable lab shots (OTS, two-shot, close-up, reveal insert)
+- Cinematic coordinator: request → lock input → Level Sequence Camera Cut → completion/cancel → return register
 - HUD-free cine mode (`H`) and debug overlay (`F8`)
 - Developer save/load (`F5` / `F6`) for flags + relationship + beat id
 - Runtime greybox lab via `AAfterlightLabDirector` on `L_Dev_CinematicLab` (single sun/sky in the authored map)
+
+See `docs/implementation/cinematic-camera-spike.md` for the camera authority model.
 
 ## Intentionally not implemented
 
@@ -45,7 +48,7 @@ MetaHuman, final characters, screenplay, combat, inventory, GAS/Lyra, World Part
 
 ## Camera
 
-`UAfterlightCameraSubsystem` blends Player ViewTarget to registered cine cameras. Recipes store focal length, aperture, blend time, framing bias. No automatic director AI.
+`UAfterlightCameraSubsystem` blends Player ViewTarget to registered cine cameras or the pawn. Recipes store lens, focus/DOF intent, blend, lag, and optional push-in. Shots are named (`Dialogue.OTS.Companion`, etc.). Sequencer authority is owned by `UAfterlightCinematicCoordinator`. No automatic director AI.
 
 ## Interaction
 

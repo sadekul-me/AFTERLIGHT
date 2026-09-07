@@ -25,13 +25,13 @@ Unattended systems smoke (standalone, then exit):
 1. Spawn in the greybox corridor.
 2. Walk toward the companion (`WASD`, mouse look).
 3. When close/facing, prompt **Talk** (`E`).
-4. Camera blends Explore → Dialogue.
+4. Camera blends Explore → Dialogue OTS (no snap).
 5. Companion: “Can you hear me?”
 6. Choose **1** “I'm fine.” (Trust +0.25 → close follow) or **2** “Who are you?” (Suspicion +0.65 → far follow).
-7. Companion follow distance changes (close vs far).
-8. Camera returns to Explore; input restored.
+7. Intimate close-up hold, then camera blends back to Explore.
+8. Input restored to Full.
 9. Inspect the world object (`E`).
-10. Story flag `Story.Test.InspectedObject` is granted; cinematic register is requested then released without a level reload.
+10. Reveal Level Sequence (~3s) plays with Locked input, then releases to Explore.
 
 ## Debug controls
 
@@ -43,6 +43,13 @@ Unattended systems smoke (standalone, then exit):
 | F6 | Developer load |
 | 1 / 2 | Dialogue choices |
 | `Afterlight.ResetLab` | Reset technical lab flags/relationship |
+| F7 | Force Explore register |
+| F9 | Force Dialogue OTS |
+| F10 | Play inspect Level Sequence |
+| `Afterlight.Camera.Explore` | Force Explore |
+| `Afterlight.Camera.Dialogue` | Force Dialogue OTS |
+| `Afterlight.Camera.PlayReveal` | Play inspect sequence |
+| `Afterlight.Camera.Cycle` | Cycle authored shots |
 | `Afterlight.SmokeLab` | Drive talk/choice/inspect/save/load without clicking |
 | `-AfterlightSmoke` | Standalone command-line: run smoke then exit with 0/1 |
 
@@ -55,7 +62,7 @@ Automation group `Afterlight`:
 - Relationship apply/clamp/thresholds/defaults
 - Beat requirement evaluation
 - Dialogue choice transition
-- Camera register names
+- Camera register names / unknown fallback / recipe defaults / cinematic session ownership
 - Save-state struct round trip
 
 ```
@@ -66,8 +73,8 @@ UnrealEditor-Cmd.exe AFTERLIGHT.uproject -unattended -nop4 -NullRHI -ExecCmds="A
 
 - Placeholder capsule characters, engine cubes, no authored animation.
 - Runtime IMC instead of Content Input assets (same Enhanced Input API; assets can replace later).
-- Inspect cinematic is a timed register hold, not a final Level Sequence.
-- Editor PIE can be driven with `Tools/EditorPieSmoke.py`; standalone `-game` and `-AfterlightSmoke` remain the unattended proof path.
+- Inspect cinematic is a short authored-at-runtime Level Sequence (`LS_LabInspectReveal`), not a final cutscene.
+- Editor PIE can be driven with `Tools/EditorPieSmoke.py` (keep-alive + `Afterlight.SmokeLab` on the PIE world). Standalone `-game` and `-AfterlightSmoke` remain the unattended proof path.
 - Interaction traces use a forward overlap probe on Pawn, WorldStatic, and WorldDynamic so capsules and greybox props are detectable.
 - No player-facing save UI.
 - Tier A laptop: hardware RT off, VSM off. Not a final picture-quality target.
