@@ -1,5 +1,11 @@
 #include "Relationship/AfterlightRelationshipSubsystem.h"
 
+UAfterlightRelationshipSubsystem::UAfterlightRelationshipSubsystem()
+{
+	State.Trust = 0.5f;
+	State.Suspicion = 0.f;
+}
+
 void UAfterlightRelationshipSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);

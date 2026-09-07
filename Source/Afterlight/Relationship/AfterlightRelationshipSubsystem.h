@@ -14,6 +14,7 @@ class AFTERLIGHT_API UAfterlightRelationshipSubsystem : public UGameInstanceSubs
 	GENERATED_BODY()
 
 public:
+	UAfterlightRelationshipSubsystem();
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	UFUNCTION(BlueprintPure, Category = "Afterlight|Relationship")

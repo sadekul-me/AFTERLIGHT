@@ -10,17 +10,15 @@ MSVC 14.44 is pinned in `Source/AFTERLIGHT.Target.cs` and `DefaultEngine.ini`.
 
 ## How to launch
 
-Open `D:\Programming\AFTERLIGHT\AFTERLIGHT.uproject`.
+Open `D:\Programming\AFTERLIGHT\AFTERLIGHT.uproject` (starts on `L_Dev_CinematicLab`).
 
-Default map is Engine `Template_Default` (no World Partition). `AAfterlightGameMode` spawns `AAfterlightLabDirector`, which builds the **runtime cinematic lab** (corridor + room + companion + inspectable + cine cameras).
+Default map is `Content/Environments/Slice01/L_Dev_CinematicLab` (no World Partition). The map holds one directional light, one sky light, a PlayerStart, and `AAfterlightLabDirector`. The director still builds greybox geometry, companion, inspectable, and cine cameras at runtime.
 
 Unattended systems smoke (standalone, then exit):
 
 ```
-"D:\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "D:\Programming\AFTERLIGHT\AFTERLIGHT.uproject" /Engine/Maps/Templates/Template_Default -game -unattended -nop4 -NullRHI -AfterlightSmoke
+"D:\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "D:\Programming\AFTERLIGHT\AFTERLIGHT.uproject" /Game/Environments/Slice01/L_Dev_CinematicLab -game -unattended -nop4 -NullRHI -AfterlightSmoke
 ```
-
-An authored `Content/Environments/Slice01/L_Dev_CinematicLab` umap is planned; it is not required for the technical flow.
 
 ## Playable technical flow (~30–90s)
 
@@ -54,7 +52,7 @@ Debug overlay shows flags, beat, Trust/Suspicion, camera register, input state, 
 
 Automation group `Afterlight`:
 
-- Relationship apply/clamp/thresholds
+- Relationship apply/clamp/thresholds/defaults
 - Beat requirement evaluation
 - Dialogue choice transition
 - Camera register names
@@ -69,7 +67,7 @@ UnrealEditor-Cmd.exe AFTERLIGHT.uproject -unattended -nop4 -NullRHI -ExecCmds="A
 - Placeholder capsule characters, engine cubes, no authored animation.
 - Runtime IMC instead of Content Input assets (same Enhanced Input API; assets can replace later).
 - Inspect cinematic is a timed register hold, not a final Level Sequence.
-- Editor PIE was not the primary automated verification path; standalone `-game` and `-AfterlightSmoke` are.
+- Editor PIE can be driven with `Tools/EditorPieSmoke.py`; standalone `-game` and `-AfterlightSmoke` remain the unattended proof path.
 - Interaction traces use a forward overlap probe on Pawn, WorldStatic, and WorldDynamic so capsules and greybox props are detectable.
 - No player-facing save UI.
 - Tier A laptop: hardware RT off, VSM off. Not a final picture-quality target.

@@ -9,6 +9,15 @@
 
 #if WITH_AUTOMATION_TESTS
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightRelationshipDefaultTest, "Afterlight.Relationship.DefaultState", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightRelationshipDefaultTest::RunTest(const FString& Parameters)
+{
+	const FAfterlightRelationshipState State;
+	TestEqual(TEXT("Default Trust is 0.5"), State.Trust, 0.5f);
+	TestEqual(TEXT("Default Suspicion is 0"), State.Suspicion, 0.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightRelationshipDeltaTest, "Afterlight.Relationship.ApplyDelta", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
 bool FAfterlightRelationshipDeltaTest::RunTest(const FString& Parameters)
 {

@@ -14,7 +14,7 @@ Premium cinematic narrative sci-fi/cyberpunk game.
 
 A highly polished **5–10 minute Cinematic Vertical Slice**.
 
-This repository currently contains the **engineering foundation**: movement, interaction, companion, dialogue/relationship verbs, thin cinematic camera, HUD-free mode, and a runtime greybox lab.
+This repository currently contains the **engineering foundation**: movement, interaction, companion, dialogue/relationship verbs, thin cinematic camera, HUD-free mode, and `L_Dev_CinematicLab`.
 
 See:
 
@@ -27,7 +27,7 @@ See:
 "D:\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat" AFTERLIGHTEditor Win64 Development -Project="D:\Programming\AFTERLIGHT\AFTERLIGHT.uproject"
 ```
 
-Open `AFTERLIGHT.uproject` in Unreal Editor 5.8.2.
+Open `AFTERLIGHT.uproject` in Unreal Editor 5.8.2 (startup map: `L_Dev_CinematicLab`).
 
 ## Source control
 

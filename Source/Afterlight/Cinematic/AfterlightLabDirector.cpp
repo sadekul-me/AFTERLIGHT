@@ -25,7 +25,10 @@
 #include "TimerManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
-#include "HAL/PlatformMisc.h"
+#include "InputActionValue.h"
+#include "EngineUtils.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/SkyLight.h"
 #include "Core/AfterlightLog.h"
 
 AAfterlightLabDirector::AAfterlightLabDirector()
@@ -425,6 +428,27 @@ bool AAfterlightLabDirector::RunTechnicalSmoke(FString& OutReport)
 	bAll &= Check(FMath::IsNearlyEqual(Relationship->GetState().Trust, 0.5f, 0.01f), TEXT("default Trust 0.5"), OutReport);
 	bAll &= Check(FMath::IsNearlyEqual(Relationship->GetState().Suspicion, 0.f, 0.01f), TEXT("default Suspicion 0"), OutReport);
 	bAll &= Check(Narrative->GetCurrentBeatId() == FName(TEXT("Lab.Start")), TEXT("beat Lab.Start after reset"), OutReport);
+
+	int32 DirectionalLights = 0;
+	int32 SkyLights = 0;
+	for (TActorIterator<ADirectionalLight> It(GetWorld()); It; ++It)
+	{
+		++DirectionalLights;
+	}
+	for (TActorIterator<ASkyLight> It(GetWorld()); It; ++It)
+	{
+		++SkyLights;
+	}
+	bAll &= Check(DirectionalLights == 1, TEXT("exactly one directional light"), OutReport);
+	bAll &= Check(SkyLights <= 1, TEXT("at most one sky light"), OutReport);
+
+	const FRotator LookBefore = PC->GetControlRotation();
+	Protagonist->Look(FInputActionValue(FVector2D(18.f, -5.f)));
+	PC->UpdateRotation(0.016f);
+	bAll &= Check(FMath::Abs(PC->GetControlRotation().Yaw - LookBefore.Yaw) > 1.f, TEXT("look yaw applied"), OutReport);
+	Protagonist->Move(FInputActionValue(FVector2D(0.f, 1.f)));
+	bAll &= Check(Protagonist->GetPendingMovementInputVector().Size() > 0.05f, TEXT("move input applied"), OutReport);
+	Protagonist->ConsumeMovementInputVector();
 
 	Protagonist->TeleportTo(FVector(540.f, 40.f, 92.f), FRotator::ZeroRotator, false, true);
 	PC->SetControlRotation(FRotator(0.f, 0.f, 0.f));

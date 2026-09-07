@@ -37,7 +37,7 @@ AFTERLIGHT is a premium cinematic narrative sci-fi/cyberpunk game.
 - Cinematic coordinator: request control → lock input → change register → release
 - HUD-free cine mode (`H`) and debug overlay (`F8`)
 - Developer save/load (`F5` / `F6`) for flags + relationship + beat id
-- Runtime greybox lab via `AAfterlightLabDirector`
+- Runtime greybox lab via `AAfterlightLabDirector` on `L_Dev_CinematicLab` (single sun/sky in the authored map)
 
 ## Intentionally not implemented
 
