@@ -58,7 +58,7 @@ Start: Trust 0.50, Suspicion 0.00.
 | **Walk.** | `ChoseFollow` | Trust +0.25 | Trust 0.75 | Close follow |
 | **You talk like I belong to you.** | `ChoseQuestion` | Suspicion +0.65 | Suspicion 0.65 | Far follow |
 
-No numeric meter. Choices still show in cine mode as `[1]` / `[2]` subtitles.
+No numeric meter. Pass 1.5 removed `[1]` / `[2]` numbering; stacked choice text remains. See `docs/implementation/vertical-slice-pass1-5.md`.
 
 ## Branch texture (Pass 1)
 
@@ -76,7 +76,7 @@ No final animation. Sleeve vs palm is dialogue/position proxy only.
 
 ## Walk-and-talk
 
-Existing `UAfterlightDialogueRunner` gained `NextNodeId`, `AutoAdvanceSeconds`, and `bKeepGameplayInput`. Linear nodes stay active until `Advance()`. Cut dialogue sets `bKeepGameplayInput` so movement/look stay Full. Maya uses an authored waypoint path and waits if the player lags (`follow distance + 220`).
+Existing `UAfterlightDialogueRunner` gained `NextNodeId`, `AutoAdvanceSeconds`, and `bKeepGameplayInput`. Linear nodes stay active until `Advance()`. Cut dialogue sets `bKeepGameplayInput` so movement/look stay Full. Maya uses an authored waypoint path and waits if the player lags (`follow distance + 160` as of Pass 1.5).
 
 If the player stops, lines still advance. If they never enter the Cut, a 14s fail-soft starts the sweep anyway.
 
@@ -86,11 +86,11 @@ If the player stops, lines still advance. If they never enter the Cut, a 14s fai
 
 Hide recess is a physical alcove (Y > 240 around X 2420). Threat register + Constrained look during the pass.
 
-Fail-soft:
+Fail-soft (Pass 1.5):
 
-- Slightly late: teleport into the recess when the sweep timer ends.
+- Slightly late: scripted ease into the recess (smoke still teleports).
 - Ignore the beat / walk to the hatch: grant `SweepPassed` near X 3280 so the slice cannot soft-lock.
-- Compromise: late hide is a pull, not Maya grabbing a sleeve.
+- Compromise: late hide is a camera-assisted pull, not a visible pop.
 
 ## Quiet beat
 
@@ -101,14 +101,14 @@ Intimate close-up. Mug is a greybox block. Wrong-hand event is dialogue + Maya o
 
 ## Warning
 
-`UAfterlightLevelSequenceFactory::CreateWarningSequence` builds runtime `LS_Slice01_Warning` (~18s Camera Cut on the Reveal insert camera). Coordinator: Gameplay → Cinematic/Locked → play → release → Intimate after-lines.
+`UAfterlightLevelSequenceFactory::CreateWarningSequence` builds runtime `LS_Slice01_Warning` (~22s Camera Cut on the Reveal insert camera as of Pass 1.5). Coordinator: Gameplay → Cinematic/Locked → play → release → Intimate after-lines.
 
-Approved recording text plays as speaker `Recording` (subtitles). No AI voice. No downloaded VO. Silence rather than temp music.
+Approved recording text plays as speaker `Recording` (subtitles, spoken hold). No AI voice. No downloaded VO. Pass 1.5 adds procedural temp beds (rain, electric, drone, pump, warning crackle, sting).
 
 ## Ending
 
 Maya: “He sounds so sure.” / “Was he?” / “No.”  
-Witness LED intensity comes up. Reveal register. Black scrim + **AFTERLIGHT** (no tagline).
+Witness LED intensity comes up. Reveal register. Short silence → sting → black scrim → **AFTERLIGHT** (no tagline).
 
 ## Controls
 
@@ -131,12 +131,12 @@ Lab commands (`Afterlight.ResetLab`, `-AfterlightSmoke`) still apply on `L_Dev_C
 
 - Capsule Maya / protagonist, engine cubes, text signs.
 - Zone lights only (cool Underdeck, warmer Cut, warm Pump House). No Lumen quality target.
-- No rain audio, no drone cue, no room tone (clean silence).
-- Warning is still + subtitles, not a slate movie.
+- Pass 1.5: procedural temp beds replace clean silence. See `vertical-slice-pass1-5.md`.
+- Warning is a cracked-slate silhouette + flicker + camera push, not a rendered movie.
 
 ## Runtime
 
-Authored holds (wake, lines, sweep, warning, title) are about **4.5–6 minutes** if the player never lingers. A normal viewing run that waits for Maya, reads the Cut notices, and sits in the quiet beat is estimated **7–8.5 minutes**. Walking was not padded; Maya is slower (180) than the player (280), so wait-for-player is the extra texture.
+Authored holds (wake, lines, sweep, warning, title) are about **5–7 minutes** if the player never lingers (Pass 1.5 lengthened spoken holds). A normal viewing run that waits for Maya, reads the Cut notices, and sits in the quiet beat is estimated **7–9 minutes**. Walking was not padded; Maya is slower (165) than the player (280), so wait-for-player is the extra texture.
 
 Command-line smoke is accelerated and is not a runtime measurement.
 
@@ -155,14 +155,7 @@ Works:
 - Threat is a polite spotlight, not combat.
 - Slice completes without developer intervention (smoke path).
 
-Still game-like:
-
-- Capsule Maya idle / waypoint walk.
-- Choice list is numbered `[1]` / `[2]`.
-- Fail-soft hide is a teleport.
-- Hatch/tin still want `E` if cine is off.
-- Warning sequence is a still camera, not a cracked-slate image.
-- No rain, no footsteps mix, no civic drone VO.
+Still game-like after Pass 1.5: capsule Maya, greybox rooms, E on hatch/tin, no human VO. Details in `vertical-slice-pass1-5.md`.
 
 ## Tests
 
@@ -172,6 +165,7 @@ Automation group `Afterlight` (existing +):
 - `Afterlight.Slice01.FlagProgression`
 - `Afterlight.Narrative.DialogueLinearAdvance`
 - `Afterlight.Slice01.WarningSequenceName`
+- Pass 1.5: `Afterlight.Slice01.HideRecoveryLerp`, `Afterlight.UI.ChoicePresentation`, `Afterlight.UI.SpokenHold`
 
 Smoke:
 
@@ -197,13 +191,12 @@ Editor PIE helper: `Tools/EditorPieSliceSmoke.py`.
 ## Known limitations / technical debt
 
 - `LS_Slice01_Warning` is created at runtime (same pattern as lab inspect), not a Content `.uasset`.
-- No temp audio loops.
-- No MetaHuman / final Maya mesh / VO.
-- Hide fail-soft teleports instead of a pull animation.
-- Contact still uses numbered choice UI.
+- No MetaHuman / final Maya mesh / human VO.
 - Save/load restores flags/relationship/beat, not actor transforms; use debug jumps after load if the pawn is in the wrong room.
 - GameMode still auto-spawns `AAfterlightLabDirector` on maps that have neither director.
 
+Presentation polish from this baseline is recorded in `docs/implementation/vertical-slice-pass1-5.md`.
+
 ## Next recommended milestone
 
-**Pass 1.5 cinematic performance polish** — temp VO or performed timing, Maya staging/idle, hide pull without teleport, cracked-slate still, and a real HUD-free GPU take. Do not start MetaHuman until that pass is signed off.
+**Character Animation & Performance Prototype** — do not start until Pass 1.5 is signed off.

@@ -35,12 +35,16 @@ public:
 	void SetLeadPath(const TArray<FVector>& Points, bool bWaitForPlayer);
 	void ClearLeadPath();
 	void SetMoveEnabled(bool bEnabled);
+	void SetWorldLookTargets(const TArray<FVector>& Points);
+	void SetPreferPlayerLook(bool bPreferPlayer);
+	void GlanceAt(const FVector& WorldLocation);
 	bool HasReachedPathEnd() const;
 	bool IsWaitingForPlayer() const { return bWaitingForPlayer; }
 
 protected:
 	void UpdateFacing(float DeltaSeconds);
 	void UpdatePath(float DeltaSeconds);
+	void UpdatePresence(float DeltaSeconds);
 	APawn* ResolveProtagonist() const;
 
 	UPROPERTY(VisibleAnywhere, Category = "Afterlight")
@@ -63,6 +67,13 @@ protected:
 	bool bMoveEnabled = true;
 	bool bWaitForPlayer = true;
 	bool bWaitingForPlayer = false;
+	bool bPreferPlayerLook = true;
 	TArray<FVector> PathPoints;
+	TArray<FVector> WorldLookTargets;
 	int32 PathIndex = 0;
+	FVector GlanceLocation = FVector::ZeroVector;
+	float GlanceHold = 0.f;
+	float PresenceTimer = 0.f;
+	float PathPause = 0.f;
+	int32 PresenceLookIndex = 0;
 };

@@ -70,6 +70,12 @@ void AAfterlightLanternDrone::Tick(float DeltaSeconds)
 	const float Alpha = FMath::Clamp(SweepElapsed / SweepDuration, 0.f, 1.f);
 	const float Ease = Alpha * Alpha * (3.f - 2.f * Alpha);
 	SetActorLocation(FMath::Lerp(SweepStart, SweepEnd, Ease));
+	ScanYaw += DeltaSeconds * 55.f;
+	if (Spotlight)
+	{
+		Spotlight->SetRelativeRotation(FRotator(-62.f - FMath::Sin(SweepElapsed * 1.7f) * 8.f, FMath::Sin(ScanYaw * 0.08f) * 18.f, 0.f));
+		Spotlight->SetIntensity(9000.f + FMath::Sin(SweepElapsed * 6.f) * 2500.f);
+	}
 	if (Alpha >= 1.f)
 	{
 		bSweeping = false;

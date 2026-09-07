@@ -10,6 +10,7 @@
 #include "Cinematic/AfterlightLevelSequenceFactory.h"
 #include "LevelSequence.h"
 #include "Character/AfterlightPlayerController.h"
+#include "UI/AfterlightPresentationFormat.h"
 
 #if WITH_AUTOMATION_TESTS
 
@@ -259,6 +260,52 @@ bool FAfterlightSaveStateRoundTripTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Flag preserved"), NarrativeCopy.StoryFlags.HasTag(AfterlightTags::Story_Test_InspectedObject));
 	TestEqual(TEXT("Trust preserved"), RelCopy.Trust, 0.65f);
 	TestEqual(TEXT("Suspicion preserved"), RelCopy.Suspicion, 0.2f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightHideRecoveryLerpTest, "Afterlight.Slice01.HideRecoveryLerp", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightHideRecoveryLerpTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("Alpha at start is 0"), FAfterlightPresentationFormat::HideRecoveryAlpha(0.f, 1.2f), 0.f);
+	TestEqual(TEXT("Alpha at end is 1"), FAfterlightPresentationFormat::HideRecoveryAlpha(1.2f, 1.2f), 1.f);
+	const float Mid = FAfterlightPresentationFormat::HideRecoveryAlpha(0.6f, 1.2f);
+	TestTrue(TEXT("Midpoint is eased not linear"), Mid > 0.45f && Mid < 0.55f);
+	TestTrue(TEXT("Early frame is not already at destination"), FAfterlightPresentationFormat::HideRecoveryAlpha(0.01f, 1.2f) < 0.05f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightChoicePresentationTest, "Afterlight.UI.ChoicePresentation", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightChoicePresentationTest::RunTest(const FString& Parameters)
+{
+	TArray<FText> Choices;
+	Choices.Add(NSLOCTEXT("Afterlight", "S01Walk", "Walk."));
+	Choices.Add(NSLOCTEXT("Afterlight", "S01Question", "You talk like I belong to you."));
+	const FString Formatted = FAfterlightPresentationFormat::FormatChoiceList(Choices);
+	TestTrue(TEXT("Walk text is present"), Formatted.Contains(TEXT("Walk.")));
+	TestFalse(TEXT("No [1] debug numbering"), Formatted.Contains(TEXT("[1]")));
+	TestFalse(TEXT("No [2] debug numbering"), Formatted.Contains(TEXT("[2]")));
+	TestTrue(TEXT("Choices are stacked"), Formatted.Contains(TEXT("\n\n")));
+	TestTrue(TEXT("First option is numbered without brackets"), Formatted.StartsWith(TEXT("1")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightInteractPromptTest, "Afterlight.UI.InteractPrompt", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightInteractPromptTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("Talk prompt is contextual"), FAfterlightPresentationFormat::FormatInteractPrompt(FText::FromString(TEXT("Talk"))), FString(TEXT("E    Talk")));
+	TestEqual(TEXT("Open prompt is contextual"), FAfterlightPresentationFormat::FormatInteractPrompt(FText::FromString(TEXT("Open"))), FString(TEXT("E    Open")));
+	TestTrue(TEXT("Empty prompt stays empty"), FAfterlightPresentationFormat::FormatInteractPrompt(FText::GetEmpty()).IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightSpokenHoldTest, "Afterlight.UI.SpokenHold", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightSpokenHoldTest::RunTest(const FString& Parameters)
+{
+	const FText Warning = FText::FromString(TEXT("If you are hearing this, they already have the shape of you."));
+	const float Hold = FAfterlightPresentationFormat::SpokenHoldSeconds(Warning);
+	TestTrue(TEXT("Long warning line holds as if spoken"), Hold >= 3.6f);
+	TestEqual(TEXT("Authored override is honored"), FAfterlightPresentationFormat::SpokenHoldSeconds(Warning, 4.2f), 4.2f);
+	TestTrue(TEXT("Short line still has a human pause"), FAfterlightPresentationFormat::SpokenHoldSeconds(FText::FromString(TEXT("No."))) >= 2.f);
 	return true;
 }
 

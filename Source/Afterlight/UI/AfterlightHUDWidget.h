@@ -22,7 +22,12 @@ public:
 	void SetDebugVisible(bool bVisible);
 	void SetTitle(const FText& Text);
 	void HideTitle();
+	void SetTitleScrimVisible(bool bVisible);
+	void SetGuidance(const FText& Text);
+	void SetEndFooter(const FText& Text);
+	void SetHoldCard(bool bHold);
 	bool IsDialogueVisible() const { return bDialogueVisible; }
+	bool IsHoldCard() const { return bHoldCard; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -36,9 +41,12 @@ private:
 	TWeakObjectPtr<UTextBlock> ChoiceBlock;
 	TWeakObjectPtr<UTextBlock> DebugBlock;
 	TWeakObjectPtr<UTextBlock> TitleBlock;
+	TWeakObjectPtr<UTextBlock> GuidanceBlock;
+	TWeakObjectPtr<UTextBlock> EndFooterBlock;
 	TWeakObjectPtr<UImage> TitleScrim;
 
 	bool bCineMode = false;
 	bool bDialogueVisible = false;
-	bool bDebugVisible = true;
+	bool bDebugVisible = false;
+	bool bHoldCard = false;
 };

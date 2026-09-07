@@ -43,13 +43,34 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
 	void HideTitle();
 
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
+	void ShowBlackScrim();
+
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
+	void ShowGuidance(const FText& Text, float DurationSeconds = 0.f);
+
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
+	void ClearGuidance();
+
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
+	void ShowEntryCard();
+
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
+	void ShowEndCard();
+
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|UI")
+	void SetDeveloperOverlay(bool bVisible);
+
+	bool IsHoldCard() const;
+
 	UAfterlightHUDWidget* GetWidget() const { return Widget; }
 
 private:
 	void EnsureWidget();
 
 	bool bCineMode = false;
-	bool bDebugVisible = true;
+	bool bDebugVisible = false;
+	float GuidanceSecondsRemaining = 0.f;
 
 	UPROPERTY()
 	TObjectPtr<UAfterlightHUDWidget> Widget;

@@ -50,6 +50,9 @@ protected:
 	void HandleDebug();
 	void HandleChoice1();
 	void HandleChoice2();
+	void HandleContinue();
+	void HandleReplay();
+	void HandleExitSlice();
 	void HandleSaveTest();
 	void HandleLoadTest();
 	void HandleForceExplore();
@@ -82,6 +85,15 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UInputAction> Choice2Action;
+
+	UPROPERTY()
+	TObjectPtr<UInputAction> ContinueAction;
+
+	UPROPERTY()
+	TObjectPtr<UInputAction> ReplayAction;
+
+	UPROPERTY()
+	TObjectPtr<UInputAction> ExitSliceAction;
 
 	UPROPERTY()
 	TObjectPtr<UInputAction> SaveTestAction;

@@ -19,6 +19,9 @@
 #include "Cinematic/AfterlightCinematicCoordinator.h"
 #include "Cinematic/AfterlightLevelSequenceFactory.h"
 #include "UI/AfterlightPresentationSubsystem.h"
+#include "UI/AfterlightPresentationFormat.h"
+#include "Audio/AfterlightTempAudio.h"
+#include "Components/AudioComponent.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/PointLight.h"
@@ -34,6 +37,9 @@
 #include "Misc/Parse.h"
 #include "HAL/PlatformMisc.h"
 #include "EngineUtils.h"
+#include "GameFramework/Character.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Core/AfterlightLog.h"
 
 namespace
@@ -63,9 +69,14 @@ void AAfterlightSlice01Director::BeginPlay()
 		if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 		{
 			UI->SetCineMode(true);
+			UI->SetDeveloperOverlay(false);
 		}
+		BeginEntry();
 	}
-	BeginWake();
+	else
+	{
+		BeginWake();
+	}
 	MaybeScheduleCommandLineSmoke();
 }
 
@@ -82,6 +93,11 @@ void AAfterlightSlice01Director::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+
+	UpdateHideRecovery(DeltaSeconds);
+	UpdateWarningPresentation(DeltaSeconds);
+	UpdateAudioBeds();
+	UpdateOwnerGuidance(DeltaSeconds);
 
 	if (!bContactStarted && Narrative->HasFlag(AfterlightTags::Story_Slice01_Woke) && !Narrative->HasFlag(AfterlightTags::Story_Slice01_MetMaya))
 	{
@@ -107,13 +123,12 @@ void AAfterlightSlice01Director::Tick(float DeltaSeconds)
 
 	if (!Narrative->HasFlag(AfterlightTags::Story_Slice01_SweepPassed) && Pawn->GetActorLocation().X > 3280.f)
 	{
+		bHideRecovering = false;
 		if (!bSweepStarted)
 		{
 			bSweepStarted = true;
 		}
-		Narrative->GrantFlag(AfterlightTags::Story_Slice01_SweepPassed);
-		SetBeat(TEXT("Slice01.Hatch"));
-		ApplyInputFull();
+		CompleteSweep();
 	}
 }
 
@@ -245,11 +260,14 @@ void AAfterlightSlice01Director::BuildWorld()
 	SpawnBox(FVector(3820.f, 420.f, 150.f), FVector(8.4f, 0.25f, 4.f), FLinearColor::Gray);
 	SpawnBox(FVector(3720.f, 80.f, 20.f), FVector(1.1f, 0.6f, 0.7f), FLinearColor::Gray);
 
-	SpawnLight(FVector(700.f, 0.f, 260.f), FLinearColor(0.55f, 0.7f, 0.85f), 6.f, 1400.f);
-	SpawnLight(FVector(2500.f, 0.f, 260.f), FLinearColor(1.f, 0.72f, 0.45f), 7.f, 1600.f);
-	SpawnLight(FVector(2400.f, 180.f, 170.f), FLinearColor(1.f, 0.8f, 0.5f), 4.f, 500.f);
-	SpawnLight(FVector(3720.f, 0.f, 210.f), FLinearColor(1.f, 0.78f, 0.52f), 5.f, 900.f);
+	SpawnLight(FVector(520.f, -40.f, 210.f), FLinearColor(0.45f, 0.58f, 0.78f), 3.2f, 900.f);
+	SpawnLight(FVector(700.f, 0.f, 260.f), FLinearColor(0.5f, 0.66f, 0.82f), 4.4f, 1300.f);
+	SpawnLight(FVector(2500.f, 0.f, 260.f), FLinearColor(1.f, 0.68f, 0.4f), 6.2f, 1500.f);
+	SpawnLight(FVector(2400.f, 180.f, 170.f), FLinearColor(1.f, 0.78f, 0.48f), 5.5f, 520.f);
+	SpawnLight(FVector(3720.f, 0.f, 210.f), FLinearColor(1.f, 0.82f, 0.58f), 6.4f, 850.f);
 	WitnessLed = SpawnLight(FVector(3360.f, -80.f, 190.f), FLinearColor(0.9f, 0.95f, 1.f), 0.05f, 200.f);
+	HatchLight = SpawnLight(FVector(3380.f, 0.f, 170.f), FLinearColor(0.95f, 0.88f, 0.62f), 1.2f, 420.f);
+	TinLight = SpawnLight(FVector(3940.f, -150.f, 90.f), FLinearColor(1.f, 0.84f, 0.55f), 0.35f, 220.f);
 
 	SpawnBox(FVector(520.f, -250.f, 70.f), FVector(0.35f, 0.22f, 1.1f), FLinearColor::Gray);
 	SpawnSign(FVector(520.f, -250.f, 150.f), FRotator(0.f, 180.f, 0.f), TEXT("WITNESS"), 14.f, FColor(90, 100, 110));
@@ -260,6 +278,13 @@ void AAfterlightSlice01Director::BuildWorld()
 	Maya = GetWorld()->SpawnActor<AAfterlightCompanionCharacter>(MayaContactLoc, FRotator(0.f, 180.f, 0.f));
 	if (Maya)
 	{
+		TArray<FVector> Looks;
+		Looks.Add(FVector(520.f, -250.f, 150.f));
+		Looks.Add(FVector(1980.f, -390.f, 210.f));
+		Looks.Add(HideLoc + FVector(0.f, 0.f, 40.f));
+		Looks.Add(DoorLoc + FVector(0.f, 0.f, 80.f));
+		Looks.Add(MugLoc + FVector(0.f, 0.f, 40.f));
+		Maya->SetWorldLookTargets(Looks);
 		if (UAfterlightInteractableComponent* Comp = Maya->FindComponentByClass<UAfterlightInteractableComponent>())
 		{
 			Comp->GrantFlag = AfterlightTags::Story_Slice01_MetMaya;
@@ -274,7 +299,7 @@ void AAfterlightSlice01Director::BuildWorld()
 		Door->SetActorScale3D(FVector(0.4f, 1.6f, 2.4f));
 		if (UAfterlightInteractableComponent* Comp = Door->FindComponentByClass<UAfterlightInteractableComponent>())
 		{
-			Comp->PromptText = NSLOCTEXT("Afterlight", "HatchPrompt", "Hatch");
+			Comp->PromptText = NSLOCTEXT("Afterlight", "HatchPrompt", "Open");
 			Comp->Verb = AfterlightTags::Interaction_Use;
 			Comp->RequiredFlag = AfterlightTags::Story_Slice01_SweepPassed;
 			Comp->GrantFlag = AfterlightTags::Story_Slice01_ReachedBolt;
@@ -289,7 +314,7 @@ void AAfterlightSlice01Director::BuildWorld()
 		Tin->SetActorScale3D(FVector(0.35f, 0.28f, 0.18f));
 		if (UAfterlightInteractableComponent* Comp = Tin->FindComponentByClass<UAfterlightInteractableComponent>())
 		{
-			Comp->PromptText = NSLOCTEXT("Afterlight", "TinPrompt", "Tin");
+			Comp->PromptText = NSLOCTEXT("Afterlight", "TinPrompt", "Inspect");
 			Comp->Verb = AfterlightTags::Interaction_Inspect;
 			Comp->RequiredFlag = AfterlightTags::Story_Slice01_QuietBeat;
 			Comp->GrantFlag = AfterlightTags::Story_Slice01_FoundTin;
@@ -298,6 +323,10 @@ void AAfterlightSlice01Director::BuildWorld()
 		}
 	}
 	SpawnSign(TinLoc + FVector(0.f, 0.f, 30.f), FRotator(0.f, 180.f, 0.f), TEXT("FOR WHEN IT TAKES"), 12.f, FColor(90, 80, 70));
+
+	WarningSlate = SpawnBox(FVector(4020.f, -150.f, 92.f), FVector(0.08f, 0.55f, 0.72f), FLinearColor::Gray);
+	SpawnBox(FVector(4018.f, -150.f, 110.f), FVector(0.04f, 0.22f, 0.38f), FLinearColor::Gray);
+	SlateLight = SpawnLight(FVector(4012.f, -150.f, 118.f), FLinearColor(0.75f, 0.82f, 0.7f), 0.4f, 180.f);
 
 	Drone = GetWorld()->SpawnActor<AAfterlightLanternDrone>(FVector(1750.f, -120.f, 240.f), FRotator::ZeroRotator);
 	if (Drone)
@@ -310,9 +339,20 @@ void AAfterlightSlice01Director::BuildWorld()
 	SpawnShot(AfterlightShotIds::DialogueTwoShot, FVector(720.f, 260.f, 155.f), FVector(740.f, 40.f, 140.f), static_cast<uint8>(EAfterlightCameraRegister::Dialogue));
 	SpawnShot(AfterlightShotIds::DialogueCloseUpCompanion, FVector(748.f, 62.f, 166.f), MayaHead, static_cast<uint8>(EAfterlightCameraRegister::Intimate));
 	SpawnShot(AfterlightShotIds::ThreatPressure, FVector(2280.f, 80.f, 170.f), HideLoc + FVector(0.f, 0.f, 40.f), static_cast<uint8>(EAfterlightCameraRegister::Threat));
-	SpawnShot(AfterlightShotIds::RevealInsert, FVector(4020.f, -40.f, 145.f), TinLoc + FVector(0.f, 0.f, 10.f), static_cast<uint8>(EAfterlightCameraRegister::Reveal));
+	SpawnShot(AfterlightShotIds::RevealInsert, FVector(3990.f, -40.f, 128.f), FVector(4020.f, -150.f, 108.f), static_cast<uint8>(EAfterlightCameraRegister::Reveal));
 
-	WarningSequence = UAfterlightLevelSequenceFactory::CreateWarningSequence(this, WarningCamera, 18.f);
+	WarningSequence = UAfterlightLevelSequenceFactory::CreateWarningSequence(this, WarningCamera, 22.f);
+	if (WarningCamera)
+	{
+		WarningCamStart = WarningCamera->GetActorLocation();
+	}
+	if (!bSmoke)
+	{
+		RainBed = FAfterlightTempAudio::SpawnLoop(GetWorld(), this, TEXT("RainBed"), EAfterlightTempBed::Rain, 0.18f);
+		HumBed = FAfterlightTempAudio::SpawnLoop(GetWorld(), this, TEXT("HumBed"), EAfterlightTempBed::Electric, 0.08f);
+		PumpBed = FAfterlightTempAudio::SpawnLoop(GetWorld(), this, TEXT("PumpBed"), EAfterlightTempBed::Pump, 0.f);
+		DroneBed = FAfterlightTempAudio::SpawnLoop(GetWorld(), this, TEXT("DroneBed"), EAfterlightTempBed::Drone, 0.f);
+	}
 }
 
 void AAfterlightSlice01Director::BuildDialogue()
@@ -331,10 +371,10 @@ void AAfterlightSlice01Director::BuildDialogue()
 
 	ContactDialogue = NewObject<UAfterlightDialogueAsset>(this, TEXT("DA_Slice01_Contact"));
 	ContactDialogue->EntryNodeId = TEXT("Fingers");
-	FAfterlightDialogueNode Fingers = MakeNode(TEXT("Fingers"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Fingers", "How many fingers."), TEXT("Specific"), 2.1f, false);
-	FAfterlightDialogueNode Specific = MakeNode(TEXT("Specific"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Specific", "You're going to have to be more specific."), TEXT("Name"), 2.2f, false);
-	FAfterlightDialogueNode Name = MakeNode(TEXT("Name"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Eli", "Eli."), TEXT("LongWay"), 2.4f, false);
-	FAfterlightDialogueNode LongWay = MakeNode(TEXT("LongWay"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Long", "Okay. We can do it the long way."), TEXT("Move"), 2.3f, false);
+	FAfterlightDialogueNode Fingers = MakeNode(TEXT("Fingers"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Fingers", "How many fingers."), TEXT("Specific"), 2.6f, false);
+	FAfterlightDialogueNode Specific = MakeNode(TEXT("Specific"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Specific", "You're going to have to be more specific."), TEXT("Name"), 2.8f, false);
+	FAfterlightDialogueNode Name = MakeNode(TEXT("Name"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Eli", "Eli."), TEXT("LongWay"), 3.4f, false);
+	FAfterlightDialogueNode LongWay = MakeNode(TEXT("LongWay"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Long", "Okay. We can do it the long way."), TEXT("Move"), 2.8f, false);
 	FAfterlightDialogueNode Move = MakeNode(TEXT("Move"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Move", "We have to move. If you stay here they will write you down, and I will not get you out of that."), NAME_None, 0.f, false);
 	FAfterlightDialogueChoice Walk;
 	Walk.Text = NSLOCTEXT("Afterlight", "S01Walk", "Walk.");
@@ -348,25 +388,25 @@ void AAfterlightSlice01Director::BuildDialogue()
 	Question.NextNodeId = TEXT("QuestionLine");
 	Move.Choices.Add(Walk);
 	Move.Choices.Add(Question);
-	FAfterlightDialogueNode FollowEli = MakeNode(TEXT("FollowEli"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01FollowEli", "Eli."), TEXT("Done"), 1.6f, false);
-	FAfterlightDialogueNode QuestionLine = MakeNode(TEXT("QuestionLine"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Dont", "I don't. That's the problem."), TEXT("Done"), 2.2f, false);
+	FAfterlightDialogueNode FollowEli = MakeNode(TEXT("FollowEli"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01FollowEli", "Eli."), TEXT("Done"), 2.2f, false);
+	FAfterlightDialogueNode QuestionLine = MakeNode(TEXT("QuestionLine"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Dont", "I don't. That's the problem."), TEXT("Done"), 3.0f, false);
 	ContactDialogue->Nodes.Append({ Fingers, Specific, Name, LongWay, Move, FollowEli, QuestionLine });
 
 	CutDialogue = NewObject<UAfterlightDialogueAsset>(this, TEXT("DA_Slice01_Cut"));
 	CutDialogue->EntryNodeId = TEXT("Posts");
-	CutDialogue->Nodes.Add(MakeNode(TEXT("Posts"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Posts", "Don't look at the posts. They like faces."), TEXT("Dead"), 3.2f, true));
-	CutDialogue->Nodes.Add(MakeNode(TEXT("Dead"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Dead", "That one was dead."), TEXT("Stay"), 2.0f, true));
-	CutDialogue->Nodes.Add(MakeNode(TEXT("Stay"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Stay", "They don't stay dead because you asked."), TEXT("Where"), 2.8f, true));
-	CutDialogue->Nodes.Add(MakeNode(TEXT("Where"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Where", "You going to tell me where."), TEXT("Dry"), 2.0f, true));
-	CutDialogue->Nodes.Add(MakeNode(TEXT("Dry"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Dry", "A dry room. Then you can be difficult sitting down."), TEXT("Done"), 3.0f, true));
+	CutDialogue->Nodes.Add(MakeNode(TEXT("Posts"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Posts", "Don't look at the posts. They like faces."), TEXT("Dead"), 4.2f, true));
+	CutDialogue->Nodes.Add(MakeNode(TEXT("Dead"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Dead", "That one was dead."), TEXT("Stay"), 2.6f, true));
+	CutDialogue->Nodes.Add(MakeNode(TEXT("Stay"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Stay", "They don't stay dead because you asked."), TEXT("Where"), 3.8f, true));
+	CutDialogue->Nodes.Add(MakeNode(TEXT("Where"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Where", "You going to tell me where."), TEXT("Dry"), 2.6f, true));
+	CutDialogue->Nodes.Add(MakeNode(TEXT("Dry"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Dry", "A dry room. Then you can be difficult sitting down."), TEXT("Done"), 4.2f, true));
 
 	QuietFollowDialogue = NewObject<UAfterlightDialogueAsset>(this, TEXT("DA_Slice01_QuietF"));
 	QuietFollowDialogue->EntryNodeId = TEXT("Drip");
 	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Drip"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Drip", "You're dripping on my floor."), TEXT("Yours"), 2.2f, false));
 	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Yours"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Yours", "Your floor."), TEXT("Tonight"), 1.6f, false));
-	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Tonight"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Tonight", "Tonight."), TEXT("Hands"), 1.5f, false));
-	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Hands"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Hands", "Don't know which one is mine."), TEXT("Sorry"), 3.2f, false));
-	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Sorry"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Sorry", "Right. Sorry."), TEXT("Tick"), 3.0f, false));
+	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Tonight"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Tonight", "Tonight."), TEXT("Hands"), 2.6f, false));
+	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Hands"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Hands", "Don't know which one is mine."), TEXT("Sorry"), 4.2f, false));
+	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Sorry"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Sorry", "Right. Sorry."), TEXT("Tick"), 4.4f, false));
 	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Tick"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Tick", "You used to hate that tick. Said it sounded like a cheap dishwasher."), TEXT("Did"), 4.4f, false));
 	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Did"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Did", "Did it?"), TEXT("Pump"), 2.0f, false));
 	QuietFollowDialogue->Nodes.Add(MakeNode(TEXT("Pump"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Pump", "It sounded like a pump."), TEXT("Done"), 3.2f, false));
@@ -375,16 +415,16 @@ void AAfterlightSlice01Director::BuildDialogue()
 	QuietQuestionDialogue->EntryNodeId = TEXT("Drip");
 	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Drip"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01DripQ", "You're dripping on my floor."), TEXT("Yours"), 2.2f, false));
 	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Yours"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01YoursQ", "Your floor."), TEXT("Tonight"), 1.6f, false));
-	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Tonight"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01TonightQ", "Tonight."), TEXT("Hands"), 1.5f, false));
-	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Hands"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01HandsQ", "Don't know which one is mine."), TEXT("Sorry"), 3.2f, false));
-	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Sorry"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01SorryQ", "Right. Sorry."), TEXT("Pipe"), 3.0f, false));
+	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Tonight"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01TonightQ", "Tonight."), TEXT("Hands"), 2.6f, false));
+	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Hands"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01HandsQ", "Don't know which one is mine."), TEXT("Sorry"), 4.2f, false));
+	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Sorry"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01SorryQ", "Right. Sorry."), TEXT("Pipe"), 4.0f, false));
 	QuietQuestionDialogue->Nodes.Add(MakeNode(TEXT("Pipe"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Pipe", "Drink it before it tastes like the pipe."), TEXT("Done"), 3.6f, false));
 
 	AfterWarningDialogue = NewObject<UAfterlightDialogueAsset>(this, TEXT("DA_Slice01_After"));
 	AfterWarningDialogue->EntryNodeId = TEXT("Sure");
-	AfterWarningDialogue->Nodes.Add(MakeNode(TEXT("Sure"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Sure", "He sounds so sure."), TEXT("Was"), 2.6f, false));
-	AfterWarningDialogue->Nodes.Add(MakeNode(TEXT("Was"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Was", "Was he?"), TEXT("No"), 1.8f, false));
-	AfterWarningDialogue->Nodes.Add(MakeNode(TEXT("No"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01No", "No."), TEXT("Done"), 2.4f, false));
+	AfterWarningDialogue->Nodes.Add(MakeNode(TEXT("Sure"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Sure", "He sounds so sure."), TEXT("Was"), 3.4f, false));
+	AfterWarningDialogue->Nodes.Add(MakeNode(TEXT("Was"), TEXT("Eli"), NSLOCTEXT("Afterlight", "S01Was", "Was he?"), TEXT("No"), 2.6f, false));
+	AfterWarningDialogue->Nodes.Add(MakeNode(TEXT("No"), TEXT("Maya"), NSLOCTEXT("Afterlight", "S01No", "No."), TEXT("Done"), 3.2f, false));
 
 	WarningLines = {
 		NSLOCTEXT("Afterlight", "W1", "If this played, it took."),
@@ -432,15 +472,203 @@ float AAfterlightSlice01Director::DialogueDelay(const FText& Line, float Overrid
 	{
 		return 0.04f;
 	}
-	if (OverrideSeconds > 0.05f)
+	return FAfterlightPresentationFormat::SpokenHoldSeconds(Line, OverrideSeconds);
+}
+
+void AAfterlightSlice01Director::BeginEntry()
+{
+	bAwaitingEntry = true;
+	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
-		return OverrideSeconds;
+		PC->SetInputState(EAfterlightInputState::Locked);
 	}
-	return FMath::Clamp(Line.ToString().Len() * 0.045f, 1.6f, 4.6f);
+	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+	{
+		UI->ShowEntryCard();
+	}
+	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_OWNER_ENTRY"));
+}
+
+bool AAfterlightSlice01Director::TryAcceptContinue()
+{
+	if (!bAwaitingEntry || bSmoke)
+	{
+		return false;
+	}
+	bAwaitingEntry = false;
+	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+	{
+		UI->HideTitle();
+		UI->ShowBlackScrim();
+	}
+	GetWorldTimerManager().SetTimer(EntryHandle, this, &AAfterlightSlice01Director::BeginWake, 0.4f, false);
+	return true;
+}
+
+bool AAfterlightSlice01Director::TryReplay()
+{
+	if (!bSliceEnded || bSmoke)
+	{
+		return false;
+	}
+	ResetSlice();
+	return true;
+}
+
+void AAfterlightSlice01Director::NotifyPlayerMoved()
+{
+	if (bMoveHintShown)
+	{
+		if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+		{
+			UI->ClearGuidance();
+		}
+	}
+}
+
+void AAfterlightSlice01Director::UpdateOwnerGuidance(float DeltaSeconds)
+{
+	if (bSmoke || bAwaitingEntry || bSliceEnded)
+	{
+		return;
+	}
+	UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>();
+	AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0));
+	APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
+	if (!UI || !PC || !Pawn)
+	{
+		return;
+	}
+	if (bWarningStarted && !bTitleStarted)
+	{
+		return;
+	}
+
+	if (!bMoveHintShown && PC->GetInputState() == EAfterlightInputState::Full && !bContactStarted)
+	{
+		bMoveHintShown = true;
+		UI->ShowGuidance(NSLOCTEXT("Afterlight", "MoveHint", "WASD — Move\nMouse — Look"), 6.f);
+		if (Maya)
+		{
+			Maya->GlanceAt(Pawn->GetActorLocation() + FVector(0.f, 0.f, 70.f));
+		}
+	}
+
+	if (!bLostHintShown && !bContactStarted && PC->GetInputState() == EAfterlightInputState::Full && Pawn->GetActorLocation().X < 420.f)
+	{
+		LostHintElapsed += DeltaSeconds;
+		if (LostHintElapsed > 14.f)
+		{
+			bLostHintShown = true;
+			UI->ShowGuidance(NSLOCTEXT("Afterlight", "LostHint", "Walk toward her"), 5.f);
+		}
+	}
+
+	if (Maya && Maya->IsWaitingForPlayer() && !Maya->HasReachedPathEnd() && bContactStarted && !bQuietStarted && !bWarningStarted)
+	{
+		FollowWaitElapsed += DeltaSeconds;
+		if (!bFollowHintShown && FollowWaitElapsed > 5.5f)
+		{
+			bFollowHintShown = true;
+			UI->ShowGuidance(NSLOCTEXT("Afterlight", "FollowHint", "Follow Maya"), 0.f);
+		}
+	}
+	else
+	{
+		FollowWaitElapsed = 0.f;
+		if (bFollowHintShown)
+		{
+			bFollowHintShown = false;
+			UI->ClearGuidance();
+		}
+	}
+
+	if (bSweepStarted && !bSweepResolved)
+	{
+		if (IsPlayerInHide())
+		{
+			if (bHideHintShown)
+			{
+				UI->ClearGuidance();
+			}
+			bHideHintShown = true;
+		}
+		else
+		{
+			HideHintElapsed += DeltaSeconds;
+			if (!bHideHintShown && HideHintElapsed > 1.6f)
+			{
+				bHideHintShown = true;
+				UI->ShowGuidance(NSLOCTEXT("Afterlight", "HideHint", "Stay out of the light"), 4.5f);
+			}
+		}
+	}
+}
+
+void AAfterlightSlice01Director::UpdateWarningPresentation(float DeltaSeconds)
+{
+	if (!bWarningStarted || bTitleStarted)
+	{
+		return;
+	}
+	WarningPresentElapsed += DeltaSeconds;
+	if (SlateLight)
+	{
+		if (UPointLightComponent* Comp = SlateLight->FindComponentByClass<UPointLightComponent>())
+		{
+			const float Flicker = 0.35f + FMath::Abs(FMath::Sin(WarningPresentElapsed * 11.f)) * 1.6f
+				+ FMath::Abs(FMath::Sin(WarningPresentElapsed * 29.f)) * 0.45f;
+			Comp->SetIntensity(Flicker);
+		}
+	}
+	if (WarningCamera)
+	{
+		const FVector Target = FVector(4004.f, -150.f, 116.f);
+		const float Push = FAfterlightPresentationFormat::HideRecoveryAlpha(WarningPresentElapsed, 22.f) * 0.42f;
+		WarningCamera->SetActorLocation(FMath::Lerp(WarningCamStart, Target, Push));
+	}
+}
+
+void AAfterlightSlice01Director::UpdateAudioBeds()
+{
+	if (bSmoke)
+	{
+		return;
+	}
+	APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
+	const float X = Pawn ? Pawn->GetActorLocation().X : 0.f;
+	const bool bInterior = X > 3400.f;
+	const bool bQuiet = bQuietStarted && !bWarningStarted;
+	if (RainBed)
+	{
+		RainBed->SetVolumeMultiplier(bInterior ? 0.03f : 0.18f);
+	}
+	if (HumBed)
+	{
+		HumBed->SetVolumeMultiplier(bInterior ? 0.02f : 0.08f);
+	}
+	if (PumpBed)
+	{
+		float Pump = bInterior ? 0.11f : 0.f;
+		if (bQuiet)
+		{
+			Pump = 0.045f;
+		}
+		PumpBed->SetVolumeMultiplier(Pump);
+	}
+	if (DroneBed)
+	{
+		const bool bDrone = Drone && Drone->IsSweeping();
+		DroneBed->SetVolumeMultiplier(bDrone ? 0.22f : 0.f);
+	}
 }
 
 void AAfterlightSlice01Director::BeginWake()
 {
+	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+	{
+		UI->HideTitle();
+	}
 	SetBeat(TEXT("Slice01.Wake"));
 	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
@@ -479,6 +707,10 @@ void AAfterlightSlice01Director::BeginContact()
 	{
 		Maya->NotifyDialogueStarted();
 		Maya->ClearLeadPath();
+		if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+		{
+			Maya->GlanceAt(Pawn->GetActorLocation() + FVector(0.f, 0.f, 70.f));
+		}
 	}
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
@@ -526,7 +758,12 @@ void AAfterlightSlice01Director::HandleLine(FName SpeakerId, const FText& Line)
 	}
 	if (Node->Choices.Num() == 0 && (!Node->NextNodeId.IsNone() || GraphKind > 0))
 	{
-		GetWorldTimerManager().SetTimer(DialogueAdvanceHandle, this, &AAfterlightSlice01Director::AdvanceDialogue, DialogueDelay(Line, Node->AutoAdvanceSeconds), false);
+		float Delay = DialogueDelay(Line, Node->AutoAdvanceSeconds);
+		if (!bSmoke && GraphKind == 2 && Maya && Maya->IsWaitingForPlayer())
+		{
+			Delay += 0.85f;
+		}
+		GetWorldTimerManager().SetTimer(DialogueAdvanceHandle, this, &AAfterlightSlice01Director::AdvanceDialogue, Delay, false);
 	}
 }
 
@@ -604,6 +841,11 @@ void AAfterlightSlice01Director::HandleDialogueFinished()
 	}
 	else if (GraphKind == 3)
 	{
+		if (Maya)
+		{
+			Maya->NotifyDialogueEnded();
+			Maya->GlanceAt(TinLoc + FVector(0.f, 0.f, 20.f));
+		}
 		if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 		{
 			Narrative->GrantFlag(AfterlightTags::Story_Slice01_QuietBeat);
@@ -612,7 +854,18 @@ void AAfterlightSlice01Director::HandleDialogueFinished()
 		{
 			ApplyInputFull();
 			SetBeat(TEXT("Slice01.Tin"));
-		}, bSmoke ? 0.05f : 0.7f, false);
+			if (Maya)
+			{
+				Maya->GlanceAt(TinLoc + FVector(0.f, 0.f, 20.f));
+			}
+			if (TinLight)
+			{
+				if (UPointLightComponent* Comp = TinLight->FindComponentByClass<UPointLightComponent>())
+				{
+					Comp->SetIntensity(5.2f);
+				}
+			}
+		}, bSmoke ? 0.05f : 2.0f, false);
 	}
 	else if (GraphKind == 2)
 	{
@@ -641,6 +894,12 @@ void AAfterlightSlice01Director::BeginCut()
 	if (Maya)
 	{
 		Maya->SetLeadPath(Path, true);
+		Maya->SetPreferPlayerLook(ChoseFollow());
+		Maya->GlanceAt(FVector(1980.f, -390.f, 210.f));
+		if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+		{
+			Maya->GlanceAt(Pawn->GetActorLocation() + FVector(0.f, 0.f, 70.f));
+		}
 	}
 	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
@@ -662,7 +921,7 @@ void AAfterlightSlice01Director::BeginSweep()
 	}
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
-		PC->SetInputState(EAfterlightInputState::Constrained);
+		PC->SetInputState(EAfterlightInputState::Full);
 	}
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
@@ -670,12 +929,25 @@ void AAfterlightSlice01Director::BeginSweep()
 			? NSLOCTEXT("Afterlight", "S01Four", "Four. They turn at four.")
 			: NSLOCTEXT("Afterlight", "S01Down", "Down."),
 			TArray<FText>());
+		UI->ClearGuidance();
+	}
+	if (Maya)
+	{
+		TArray<FVector> HidePath;
+		HidePath.Add(HideLoc);
+		Maya->SetLeadPath(HidePath, true);
+		Maya->GlanceAt(HideLoc + FVector(0.f, 0.f, 40.f));
 	}
 	if (Drone)
 	{
-		Drone->BeginSweep(FVector(1750.f, -140.f, 240.f), FVector(3200.f, -140.f, 240.f), bSmoke ? 0.4f : 8.f);
+		Drone->BeginSweep(FVector(1750.f, -140.f, 240.f), FVector(3200.f, -140.f, 240.f), bSmoke ? 0.4f : 9.f);
 	}
-	GetWorldTimerManager().SetTimer(SweepHandle, this, &AAfterlightSlice01Director::FinishSweep, bSmoke ? 0.45f : 6.5f, false);
+	if (DroneBed)
+	{
+		DroneBed->SetVolumeMultiplier(0.22f);
+	}
+	const float SweepHold = bSmoke ? 0.45f : (IsPlayerNearHide() ? 9.4f : 8.2f);
+	GetWorldTimerManager().SetTimer(SweepHandle, this, &AAfterlightSlice01Director::FinishSweep, SweepHold, false);
 }
 
 bool AAfterlightSlice01Director::IsPlayerInHide() const
@@ -688,6 +960,15 @@ bool AAfterlightSlice01Director::IsPlayerInHide() const
 	return false;
 }
 
+bool AAfterlightSlice01Director::IsPlayerNearHide() const
+{
+	if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+	{
+		return FVector::Dist2D(Pawn->GetActorLocation(), HideLoc) < 420.f;
+	}
+	return false;
+}
+
 void AAfterlightSlice01Director::PullPlayerToHide()
 {
 	if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
@@ -696,11 +977,102 @@ void AAfterlightSlice01Director::PullPlayerToHide()
 	}
 }
 
+void AAfterlightSlice01Director::StartHideRecovery()
+{
+	APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
+	if (!Pawn)
+	{
+		CompleteSweep();
+		return;
+	}
+	bHideRecovering = true;
+	HideRecoverElapsed = 0.f;
+	HideRecoverStart = Pawn->GetActorLocation();
+	if (ACharacter* Character = Cast<ACharacter>(Pawn))
+	{
+		if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+		{
+			Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+		if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+		{
+			Move->StopMovementImmediately();
+		}
+	}
+	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
+	{
+		PC->SetInputState(EAfterlightInputState::Scripted);
+	}
+	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+	{
+		Camera->RequestShot(AfterlightShotIds::ThreatPressure, 0.35f);
+	}
+	if (Maya)
+	{
+		Maya->GlanceAt(HideRecoverStart + FVector(0.f, 0.f, 70.f));
+	}
+}
+
+void AAfterlightSlice01Director::UpdateHideRecovery(float DeltaSeconds)
+{
+	if (!bHideRecovering)
+	{
+		return;
+	}
+	APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
+	if (!Pawn)
+	{
+		bHideRecovering = false;
+		CompleteSweep();
+		return;
+	}
+	HideRecoverElapsed += DeltaSeconds;
+	const float Alpha = FAfterlightPresentationFormat::HideRecoveryAlpha(HideRecoverElapsed, HideRecoverDuration);
+	FVector Next = FMath::Lerp(HideRecoverStart, HideLoc, Alpha);
+	Next.Z += FMath::Sin(Alpha * PI) * 28.f;
+	Pawn->SetActorLocation(Next, false, nullptr, ETeleportType::TeleportPhysics);
+	if (Alpha >= 1.f)
+	{
+		bHideRecovering = false;
+		if (ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+			{
+				Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			}
+		}
+		Pawn->SetActorLocation(HideLoc, false, nullptr, ETeleportType::TeleportPhysics);
+		CompleteSweep();
+	}
+}
+
 void AAfterlightSlice01Director::FinishSweep()
 {
-	if (!IsPlayerInHide())
+	if (IsPlayerInHide())
+	{
+		CompleteSweep();
+		return;
+	}
+	if (bSmoke)
 	{
 		PullPlayerToHide();
+		CompleteSweep();
+		return;
+	}
+	StartHideRecovery();
+}
+
+void AAfterlightSlice01Director::CompleteSweep()
+{
+	if (bSweepResolved)
+	{
+		return;
+	}
+	bSweepResolved = true;
+	bHideRecovering = false;
+	if (DroneBed)
+	{
+		DroneBed->SetVolumeMultiplier(0.f);
 	}
 	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
@@ -717,6 +1089,14 @@ void AAfterlightSlice01Director::FinishSweep()
 		TArray<FVector> Path;
 		Path.Add(DoorLoc + FVector(-120.f, ChoseFollow() ? 40.f : -60.f, 0.f));
 		Maya->SetLeadPath(Path, true);
+		Maya->GlanceAt(DoorLoc + FVector(0.f, 0.f, 80.f));
+	}
+	if (HatchLight)
+	{
+		if (UPointLightComponent* Comp = HatchLight->FindComponentByClass<UPointLightComponent>())
+		{
+			Comp->SetIntensity(7.5f);
+		}
 	}
 	GetWorldTimerManager().SetTimer(DialogueAdvanceHandle, [this]()
 	{
@@ -757,7 +1137,7 @@ void AAfterlightSlice01Director::BeginQuiet()
 	GraphKind = 3;
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Camera->RequestShot(AfterlightShotIds::DialogueCloseUpCompanion, 0.7f);
+		Camera->RequestShot(AfterlightShotIds::DialogueCloseUpCompanion, bSmoke ? 0.2f : 1.05f);
 	}
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
@@ -766,6 +1146,12 @@ void AAfterlightSlice01Director::BeginQuiet()
 	if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
 	{
 		Pawn->TeleportTo(MugLoc + FVector(-80.f, -10.f, 0.f), FRotator(0.f, 0.f, 0.f), false, true);
+	}
+	if (Maya)
+	{
+		Maya->SetPreferPlayerLook(ChoseFollow());
+		Maya->GlanceAt(MugLoc + FVector(0.f, 0.f, 40.f));
+		Maya->NotifyDialogueStarted();
 	}
 	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
@@ -803,9 +1189,26 @@ void AAfterlightSlice01Director::BeginWarning()
 	}
 	bWarningStarted = true;
 	WarningLineIndex = 0;
+	WarningPresentElapsed = 0.f;
+	if (Maya)
+	{
+		Maya->SetActorLocation(FVector(3920.f, -40.f, 92.f));
+		Maya->ClearLeadPath();
+		Maya->GlanceAt(FVector(4020.f, -150.f, 108.f));
+		Maya->NotifyDialogueStarted();
+	}
+	if (WarningCamera)
+	{
+		WarningCamStart = WarningCamera->GetActorLocation();
+	}
 	if (UAfterlightCinematicCoordinator* Cinematic = GetWorld()->GetSubsystem<UAfterlightCinematicCoordinator>())
 	{
 		Cinematic->RequestCinematic(WarningSequence, EAfterlightCameraRegister::Intimate, 0.8f);
+	}
+	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+	{
+		UI->ClearGuidance();
+		UI->SetPrompt(FText::GetEmpty());
 	}
 	HandleWarningLine();
 }
@@ -820,10 +1223,15 @@ void AAfterlightSlice01Director::HandleWarningLine()
 	{
 		UI->ShowDialogue(TEXT("Recording"), WarningLines[WarningLineIndex], TArray<FText>());
 	}
+	if (!bSmoke)
+	{
+		FAfterlightTempAudio::PlayOneShot(GetWorld(), this, EAfterlightTempBed::Warning, 0.12f);
+	}
+	const float Hold = bSmoke ? 0.06f : FMath::Max(3.6f, FAfterlightPresentationFormat::SpokenHoldSeconds(WarningLines[WarningLineIndex]));
 	++WarningLineIndex;
 	if (WarningLines.IsValidIndex(WarningLineIndex))
 	{
-		GetWorldTimerManager().SetTimer(WarningLineHandle, this, &AAfterlightSlice01Director::HandleWarningLine, bSmoke ? 0.06f : 3.2f, false);
+		GetWorldTimerManager().SetTimer(WarningLineHandle, this, &AAfterlightSlice01Director::HandleWarningLine, Hold, false);
 	}
 }
 
@@ -847,9 +1255,24 @@ void AAfterlightSlice01Director::BeginAfterRecording()
 	}
 	GetWorldTimerManager().ClearTimer(WarningLineHandle);
 	GraphKind = 4;
+	WarningPresentElapsed = 0.f;
+	if (SlateLight)
+	{
+		if (UPointLightComponent* Comp = SlateLight->FindComponentByClass<UPointLightComponent>())
+		{
+			Comp->SetIntensity(0.25f);
+		}
+	}
+	if (Maya)
+	{
+		Maya->NotifyDialogueEnded();
+		Maya->SetPreferPlayerLook(true);
+		Maya->GlanceAt(MugLoc + FVector(0.f, 0.f, 70.f));
+		Maya->NotifyDialogueStarted();
+	}
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Camera->RequestShot(AfterlightShotIds::DialogueCloseUpCompanion, 0.7f);
+		Camera->RequestShot(AfterlightShotIds::DialogueCloseUpCompanion, bSmoke ? 0.2f : 0.9f);
 	}
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
@@ -885,19 +1308,45 @@ void AAfterlightSlice01Director::BeginTitle()
 	{
 		PC->SetInputState(EAfterlightInputState::Locked);
 	}
+	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+	{
+		UI->HideDialogue();
+	}
+	const float Silence = bSmoke ? 0.05f : 1.4f;
 	GetWorldTimerManager().SetTimer(TitleHandle, [this]()
 	{
+		if (!bSmoke)
+		{
+			FAfterlightTempAudio::PlayOneShot(GetWorld(), this, EAfterlightTempBed::Sting, 0.28f);
+		}
 		if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 		{
-			UI->HideDialogue();
-			UI->ShowTitle(NSLOCTEXT("Afterlight", "Title", "AFTERLIGHT"));
+			UI->ShowBlackScrim();
 		}
-		if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
+		GetWorldTimerManager().SetTimer(TitleBlackHandle, [this]()
 		{
-			Narrative->GrantFlag(AfterlightTags::Story_Slice01_Complete);
-		}
-		UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_SLICE_RUNTIME=%.1fs"), GetWorld()->GetTimeSeconds());
-	}, bSmoke ? 0.05f : 2.2f, false);
+			if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+			{
+				UI->ShowTitle(NSLOCTEXT("Afterlight", "Title", "AFTERLIGHT"));
+			}
+			if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
+			{
+				Narrative->GrantFlag(AfterlightTags::Story_Slice01_Complete);
+			}
+			UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_SLICE_RUNTIME=%.1fs"), GetWorld()->GetTimeSeconds());
+			if (!bSmoke)
+			{
+				GetWorldTimerManager().SetTimer(EndCardHandle, [this]()
+				{
+					bSliceEnded = true;
+					if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+					{
+						UI->ShowEndCard();
+					}
+				}, 1.8f, false);
+			}
+		}, bSmoke ? 0.02f : 0.55f, false);
+	}, Silence, false);
 }
 
 void AAfterlightSlice01Director::ClearSliceRuntime()
@@ -908,7 +1357,18 @@ void AAfterlightSlice01Director::ClearSliceRuntime()
 	bQuietStarted = false;
 	bWarningStarted = false;
 	bTitleStarted = false;
-	GraphKind = 0;
+	bHideRecovering = false;
+	bSliceEnded = false;
+	bAwaitingEntry = false;
+	bMoveHintShown = false;
+	bLostHintShown = false;
+	bFollowHintShown = false;
+	bHideHintShown = false;
+	LostHintElapsed = 0.f;
+	FollowWaitElapsed = 0.f;
+	HideHintElapsed = 0.f;
+	WarningPresentElapsed = 0.f;
+	HideRecoverElapsed = 0.f;
 	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
 		if (UAfterlightDialogueRunner* Runner = Narrative->GetDialogueRunner())
@@ -936,6 +1396,16 @@ void AAfterlightSlice01Director::ClearSliceRuntime()
 		Maya->ClearLeadPath();
 		Maya->NotifyDialogueEnded();
 	}
+	if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+	{
+		if (ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+			{
+				Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			}
+		}
+	}
 	if (Door)
 	{
 		Door->SetActorHiddenInGame(false);
@@ -950,6 +1420,39 @@ void AAfterlightSlice01Director::ClearSliceRuntime()
 		if (UPointLightComponent* Comp = WitnessLed->FindComponentByClass<UPointLightComponent>())
 		{
 			Comp->SetIntensity(0.05f);
+		}
+	}
+	if (SlateLight)
+	{
+		if (UPointLightComponent* Comp = SlateLight->FindComponentByClass<UPointLightComponent>())
+		{
+			Comp->SetIntensity(0.4f);
+		}
+	}
+	if (RainBed)
+	{
+		RainBed->SetVolumeMultiplier(bSmoke ? 0.f : 0.18f);
+	}
+	if (HumBed)
+	{
+		HumBed->SetVolumeMultiplier(bSmoke ? 0.f : 0.08f);
+	}
+	if (PumpBed)
+	{
+		PumpBed->SetVolumeMultiplier(0.f);
+	}
+	if (HatchLight)
+	{
+		if (UPointLightComponent* Comp = HatchLight->FindComponentByClass<UPointLightComponent>())
+		{
+			Comp->SetIntensity(1.2f);
+		}
+	}
+	if (TinLight)
+	{
+		if (UPointLightComponent* Comp = TinLight->FindComponentByClass<UPointLightComponent>())
+		{
+			Comp->SetIntensity(0.35f);
 		}
 	}
 }
@@ -1129,6 +1632,7 @@ bool AAfterlightSlice01Director::RunSliceSmoke(FString& OutReport)
 	bAll &= Check(Narrative->HasFlag(AfterlightTags::Story_Slice01_HeardWarning), TEXT("heard warning"), OutReport);
 	BeginTitle();
 	GetWorldTimerManager().ClearTimer(TitleHandle);
+	GetWorldTimerManager().ClearTimer(TitleBlackHandle);
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
 		UI->ShowTitle(NSLOCTEXT("Afterlight", "Title", "AFTERLIGHT"));

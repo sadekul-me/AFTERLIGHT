@@ -14,8 +14,12 @@
 #include "Camera/AfterlightCameraSubsystem.h"
 #include "Cinematic/AfterlightCinematicCoordinator.h"
 #include "Cinematic/AfterlightLabDirector.h"
+#include "Slice/AfterlightSlice01Director.h"
 #include "EngineUtils.h"
 #include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
+#include "HAL/PlatformMisc.h"
+#include "Engine/Engine.h"
 
 AAfterlightPlayerController::AAfterlightPlayerController()
 {
@@ -62,6 +66,9 @@ void AAfterlightPlayerController::EnsureRuntimeInput()
 	DebugAction = NewObject<UInputAction>(this, TEXT("IA_Debug"));
 	Choice1Action = NewObject<UInputAction>(this, TEXT("IA_Choice1"));
 	Choice2Action = NewObject<UInputAction>(this, TEXT("IA_Choice2"));
+	ContinueAction = NewObject<UInputAction>(this, TEXT("IA_Continue"));
+	ReplayAction = NewObject<UInputAction>(this, TEXT("IA_Replay"));
+	ExitSliceAction = NewObject<UInputAction>(this, TEXT("IA_ExitSlice"));
 	SaveTestAction = NewObject<UInputAction>(this, TEXT("IA_SaveTest"));
 	LoadTestAction = NewObject<UInputAction>(this, TEXT("IA_LoadTest"));
 	ForceExploreAction = NewObject<UInputAction>(this, TEXT("IA_ForceExplore"));
@@ -100,6 +107,10 @@ void AAfterlightPlayerController::EnsureRuntimeInput()
 	MappingContext->MapKey(DebugAction, EKeys::F8);
 	MappingContext->MapKey(Choice1Action, EKeys::One);
 	MappingContext->MapKey(Choice2Action, EKeys::Two);
+	MappingContext->MapKey(ContinueAction, EKeys::AnyKey);
+	MappingContext->MapKey(ContinueAction, EKeys::LeftMouseButton);
+	MappingContext->MapKey(ReplayAction, EKeys::R);
+	MappingContext->MapKey(ExitSliceAction, EKeys::Escape);
 	MappingContext->MapKey(SaveTestAction, EKeys::F5);
 	MappingContext->MapKey(LoadTestAction, EKeys::F6);
 	MappingContext->MapKey(ForceExploreAction, EKeys::F7);
@@ -129,6 +140,9 @@ void AAfterlightPlayerController::SetupInputComponent()
 	EIC->BindAction(DebugAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleDebug);
 	EIC->BindAction(Choice1Action, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleChoice1);
 	EIC->BindAction(Choice2Action, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleChoice2);
+	EIC->BindAction(ContinueAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleContinue);
+	EIC->BindAction(ReplayAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleReplay);
+	EIC->BindAction(ExitSliceAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleExitSlice);
 	EIC->BindAction(SaveTestAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleSaveTest);
 	EIC->BindAction(LoadTestAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleLoadTest);
 	EIC->BindAction(ForceExploreAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleForceExplore);
@@ -156,7 +170,15 @@ void AAfterlightPlayerController::SetInputState(EAfterlightInputState NewState)
 {
 	InputState = NewState;
 	ApplyInputStateToPawn();
-	const bool bShowCursor = NewState == EAfterlightInputState::Constrained;
+	bool bCine = false;
+	if (UWorld* World = GetWorld())
+	{
+		if (UAfterlightPresentationSubsystem* Presentation = World->GetSubsystem<UAfterlightPresentationSubsystem>())
+		{
+			bCine = Presentation->IsCineMode();
+		}
+	}
+	const bool bShowCursor = NewState == EAfterlightInputState::Constrained && !bCine;
 	bShowMouseCursor = bShowCursor;
 	bEnableClickEvents = bShowCursor;
 	if (bShowCursor)
@@ -190,6 +212,14 @@ void AAfterlightPlayerController::HandleMove(const FInputActionValue& Value)
 	{
 		AfterlightPawn->Move(Value);
 	}
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+		{
+			It->NotifyPlayerMoved();
+			break;
+		}
+	}
 }
 
 void AAfterlightPlayerController::HandleLook(const FInputActionValue& Value)
@@ -218,6 +248,16 @@ void AAfterlightPlayerController::HandleInteract()
 
 void AAfterlightPlayerController::HandleToggleCine()
 {
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+		{
+			if (It->IsAwaitingEntry() || It->IsSliceComplete())
+			{
+				return;
+			}
+		}
+	}
 	if (UAfterlightPresentationSubsystem* Presentation = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
 		Presentation->ToggleCineMode();
@@ -248,12 +288,74 @@ void AAfterlightPlayerController::ChooseDialogue(int32 Index)
 
 void AAfterlightPlayerController::HandleChoice1()
 {
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+		{
+			if (It->TryAcceptContinue())
+			{
+				return;
+			}
+		}
+	}
 	ChooseDialogue(0);
 }
 
 void AAfterlightPlayerController::HandleChoice2()
 {
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+		{
+			if (It->TryAcceptContinue())
+			{
+				return;
+			}
+		}
+	}
 	ChooseDialogue(1);
+}
+
+void AAfterlightPlayerController::HandleContinue()
+{
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+		{
+			It->TryAcceptContinue();
+			return;
+		}
+	}
+}
+
+void AAfterlightPlayerController::HandleReplay()
+{
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+		{
+			It->TryReplay();
+			return;
+		}
+	}
+}
+
+void AAfterlightPlayerController::HandleExitSlice()
+{
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+		{
+			if (!It->IsSliceComplete())
+			{
+				return;
+			}
+		}
+		if (World->WorldType == EWorldType::Game)
+		{
+			FPlatformMisc::RequestExit(false);
+		}
+	}
 }
 
 void AAfterlightPlayerController::HandleSaveTest()

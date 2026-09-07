@@ -1,5 +1,6 @@
 #include "UI/AfterlightPresentationSubsystem.h"
 #include "UI/AfterlightHUDWidget.h"
+#include "UI/AfterlightPresentationFormat.h"
 #include "Blueprint/UserWidget.h"
 #include "Character/AfterlightPlayerController.h"
 #include "Core/AfterlightPlayerContextSubsystem.h"
@@ -18,6 +19,15 @@ void UAfterlightPresentationSubsystem::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	EnsureWidget();
 
+	if (GuidanceSecondsRemaining > 0.f)
+	{
+		GuidanceSecondsRemaining = FMath::Max(0.f, GuidanceSecondsRemaining - DeltaTime);
+		if (GuidanceSecondsRemaining <= 0.f && Widget && !Widget->IsHoldCard())
+		{
+			Widget->SetGuidance(FText::GetEmpty());
+		}
+	}
+
 	bool bSequenceActive = false;
 	if (UWorld* World = GetWorld())
 	{
@@ -31,12 +41,16 @@ void UAfterlightPresentationSubsystem::Tick(float DeltaTime)
 	if (Widget)
 	{
 		Widget->SetDebugVisible(bDebugVisible && !bSuppressDev);
-		if (bSuppressDev)
+		if (bSequenceActive)
 		{
 			Widget->SetPrompt(FText::GetEmpty());
 		}
 	}
-	if (bSuppressDev)
+	if (bSequenceActive)
+	{
+		return;
+	}
+	if (Widget && Widget->IsHoldCard())
 	{
 		return;
 	}
@@ -93,16 +107,18 @@ void UAfterlightPresentationSubsystem::SetCineMode(bool bEnabled)
 	if (Widget)
 	{
 		Widget->SetCineMode(bCineMode);
-		if (bCineMode)
-		{
-			Widget->SetPrompt(FText::GetEmpty());
-		}
+		Widget->SetDebugVisible(false);
 	}
 }
 
 void UAfterlightPresentationSubsystem::ToggleDebugOverlay()
 {
-	bDebugVisible = !bDebugVisible;
+	SetDeveloperOverlay(!bDebugVisible);
+}
+
+void UAfterlightPresentationSubsystem::SetDeveloperOverlay(bool bVisible)
+{
+	bDebugVisible = bVisible;
 	EnsureWidget();
 	if (Widget)
 	{
@@ -115,7 +131,7 @@ void UAfterlightPresentationSubsystem::SetPrompt(const FText& Text)
 	EnsureWidget();
 	if (Widget)
 	{
-		Widget->SetPrompt(bCineMode ? FText::GetEmpty() : Text);
+		Widget->SetPrompt(FText::FromString(FAfterlightPresentationFormat::FormatInteractPrompt(Text)));
 	}
 }
 
@@ -141,7 +157,12 @@ void UAfterlightPresentationSubsystem::ShowTitle(const FText& Text)
 	EnsureWidget();
 	if (Widget)
 	{
+		Widget->SetHoldCard(!Text.IsEmpty());
 		Widget->SetTitle(Text);
+		if (Text.IsEmpty())
+		{
+			Widget->SetEndFooter(FText::GetEmpty());
+		}
 	}
 }
 
@@ -149,6 +170,80 @@ void UAfterlightPresentationSubsystem::HideTitle()
 {
 	if (Widget)
 	{
+		Widget->SetHoldCard(false);
 		Widget->HideTitle();
+		Widget->SetEndFooter(FText::GetEmpty());
+		Widget->SetGuidance(FText::GetEmpty());
 	}
+	GuidanceSecondsRemaining = 0.f;
+}
+
+void UAfterlightPresentationSubsystem::ShowBlackScrim()
+{
+	EnsureWidget();
+	if (Widget)
+	{
+		Widget->SetTitleScrimVisible(true);
+	}
+}
+
+void UAfterlightPresentationSubsystem::ShowGuidance(const FText& Text, float DurationSeconds)
+{
+	EnsureWidget();
+	if (Widget && Widget->IsHoldCard())
+	{
+		return;
+	}
+	if (Widget)
+	{
+		Widget->SetGuidance(Text);
+	}
+	GuidanceSecondsRemaining = DurationSeconds;
+}
+
+void UAfterlightPresentationSubsystem::ClearGuidance()
+{
+	GuidanceSecondsRemaining = 0.f;
+	if (Widget && !Widget->IsHoldCard())
+	{
+		Widget->SetGuidance(FText::GetEmpty());
+	}
+}
+
+void UAfterlightPresentationSubsystem::ShowEntryCard()
+{
+	EnsureWidget();
+	if (!Widget)
+	{
+		return;
+	}
+	Widget->SetHoldCard(true);
+	Widget->SetTitleScrimVisible(true);
+	Widget->SetTitle(NSLOCTEXT("Afterlight", "Title", "AFTERLIGHT"));
+	Widget->SetEndFooter(FText::GetEmpty());
+	Widget->SetGuidance(NSLOCTEXT("Afterlight", "BeginPrompt", "Click / Press any key to begin"));
+	Widget->SetPrompt(FText::GetEmpty());
+	GuidanceSecondsRemaining = 0.f;
+}
+
+void UAfterlightPresentationSubsystem::ShowEndCard()
+{
+	EnsureWidget();
+	if (!Widget)
+	{
+		return;
+	}
+	Widget->SetHoldCard(true);
+	Widget->SetTitleScrimVisible(true);
+	Widget->SetTitle(NSLOCTEXT("Afterlight", "Title", "AFTERLIGHT"));
+	Widget->SetEndFooter(NSLOCTEXT("Afterlight", "EndCard", "END OF VERTICAL SLICE\n\nEsc — Exit\nR — Replay"));
+	Widget->SetGuidance(FText::GetEmpty());
+	Widget->SetPrompt(FText::GetEmpty());
+	Widget->HideDialogue();
+	GuidanceSecondsRemaining = 0.f;
+}
+
+bool UAfterlightPresentationSubsystem::IsHoldCard() const
+{
+	return Widget && Widget->IsHoldCard();
 }

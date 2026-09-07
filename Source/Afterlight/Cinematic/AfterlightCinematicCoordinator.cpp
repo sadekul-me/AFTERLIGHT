@@ -61,6 +61,7 @@ void UAfterlightCinematicCoordinator::RequestCinematic(ULevelSequence* Sequence,
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
 		UI->HideDialogue();
+		UI->ClearGuidance();
 	}
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{

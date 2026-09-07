@@ -14,6 +14,7 @@ class APointLight;
 class AStaticMeshActor;
 class UAfterlightDialogueAsset;
 class ULevelSequence;
+class UAudioComponent;
 
 UCLASS()
 class AFTERLIGHT_API AAfterlightSlice01Director : public AActor
@@ -31,6 +32,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Afterlight|Slice01")
 	void ResetSlice();
 
+	bool TryAcceptContinue();
+	bool TryReplay();
+	bool IsAwaitingEntry() const { return bAwaitingEntry; }
+	bool IsSliceComplete() const { return bSliceEnded; }
+	void NotifyPlayerMoved();
+
 	bool RunSliceSmoke(FString& OutReport);
 
 protected:
@@ -46,6 +53,8 @@ protected:
 	void SetBeat(FName BeatId);
 	void ApplyInputFull();
 	void BeginWake();
+	void BeginEntry();
+	void UpdateOwnerGuidance(float DeltaSeconds);
 	void BeginContact();
 	void BeginCut();
 	void BeginSweep();
@@ -56,8 +65,14 @@ protected:
 	void BeginAfterRecording();
 	void BeginTitle();
 	void AdvanceDialogue();
+	void StartHideRecovery();
+	void CompleteSweep();
+	void UpdateHideRecovery(float DeltaSeconds);
+	void UpdateWarningPresentation(float DeltaSeconds);
+	void UpdateAudioBeds();
 	void PullPlayerToHide();
 	bool IsPlayerInHide() const;
+	bool IsPlayerNearHide() const;
 	bool ChoseFollow() const;
 	float DialogueDelay(const FText& Line, float OverrideSeconds) const;
 	void MaybeScheduleCommandLineSmoke();
@@ -97,6 +112,22 @@ protected:
 	UPROPERTY()
 	TObjectPtr<APointLight> WitnessLed;
 	UPROPERTY()
+	TObjectPtr<APointLight> SlateLight;
+	UPROPERTY()
+	TObjectPtr<APointLight> HatchLight;
+	UPROPERTY()
+	TObjectPtr<APointLight> TinLight;
+	UPROPERTY()
+	TObjectPtr<AStaticMeshActor> WarningSlate;
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> RainBed;
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> HumBed;
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> PumpBed;
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> DroneBed;
+	UPROPERTY()
 	TObjectPtr<UAfterlightDialogueAsset> ContactDialogue;
 	UPROPERTY()
 	TObjectPtr<UAfterlightDialogueAsset> CutDialogue;
@@ -116,6 +147,9 @@ protected:
 	FTimerHandle TitleHandle;
 	FTimerHandle WarningLineHandle;
 	FTimerHandle AutoTalkHandle;
+	FTimerHandle TitleBlackHandle;
+	FTimerHandle EntryHandle;
+	FTimerHandle EndCardHandle;
 
 	TArray<FText> WarningLines;
 	int32 WarningLineIndex = 0;
@@ -126,5 +160,21 @@ protected:
 	bool bQuietStarted = false;
 	bool bWarningStarted = false;
 	bool bTitleStarted = false;
+	bool bHideRecovering = false;
+	bool bSweepResolved = false;
 	bool bSmoke = false;
+	bool bAwaitingEntry = false;
+	bool bSliceEnded = false;
+	bool bMoveHintShown = false;
+	bool bLostHintShown = false;
+	bool bFollowHintShown = false;
+	bool bHideHintShown = false;
+	float LostHintElapsed = 0.f;
+	float FollowWaitElapsed = 0.f;
+	float HideHintElapsed = 0.f;
+	FVector HideRecoverStart = FVector::ZeroVector;
+	FVector WarningCamStart = FVector::ZeroVector;
+	float HideRecoverElapsed = 0.f;
+	float HideRecoverDuration = 1.2f;
+	float WarningPresentElapsed = 0.f;
 };

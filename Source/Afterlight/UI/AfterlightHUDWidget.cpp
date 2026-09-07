@@ -1,4 +1,5 @@
 #include "UI/AfterlightHUDWidget.h"
+#include "UI/AfterlightPresentationFormat.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -14,6 +15,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Engine/GameInstance.h"
+#include "Types/SlateEnums.h"
 
 TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 {
@@ -52,7 +54,7 @@ TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 	}
 	if (!DialogueBlock.IsValid())
 	{
-		UTextBlock* Dialogue = MakeText(TEXT("Dialogue"), FLinearColor(0.95f, 0.9f, 0.82f), 20);
+		UTextBlock* Dialogue = MakeText(TEXT("Dialogue"), FLinearColor(0.93f, 0.9f, 0.84f), 21);
 		Dialogue->SetAutoWrapText(true);
 		if (UCanvasPanelSlot* DialogueSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Dialogue))
 		{
@@ -64,10 +66,10 @@ TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 	}
 	if (!ChoiceBlock.IsValid())
 	{
-		UTextBlock* Choices = MakeText(TEXT("Choices"), FLinearColor(0.75f, 0.85f, 0.95f), 16);
+		UTextBlock* Choices = MakeText(TEXT("Choices"), FLinearColor(0.9f, 0.88f, 0.82f), 18);
 		if (UCanvasPanelSlot* ChoiceSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Choices))
 		{
-			ChoiceSlot->SetAnchors(FAnchors(0.5f, 0.74f));
+			ChoiceSlot->SetAnchors(FAnchors(0.5f, 0.78f));
 			ChoiceSlot->SetAlignment(FVector2D(0.5f, 0.f));
 			ChoiceSlot->SetAutoSize(true);
 		}
@@ -114,6 +116,34 @@ TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 		Title->SetVisibility(ESlateVisibility::Hidden);
 		TitleBlock = Title;
 	}
+	if (!GuidanceBlock.IsValid())
+	{
+		UTextBlock* Guide = MakeText(TEXT("Guidance"), FLinearColor(0.86f, 0.84f, 0.78f), 18);
+		Guide->SetJustification(ETextJustify::Center);
+		if (UCanvasPanelSlot* GuideSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Guide))
+		{
+			GuideSlot->SetAnchors(FAnchors(0.5f, 0.88f));
+			GuideSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+			GuideSlot->SetAutoSize(true);
+			GuideSlot->SetZOrder(22);
+		}
+		Guide->SetVisibility(ESlateVisibility::Hidden);
+		GuidanceBlock = Guide;
+	}
+	if (!EndFooterBlock.IsValid())
+	{
+		UTextBlock* Footer = MakeText(TEXT("EndFooter"), FLinearColor(0.78f, 0.76f, 0.7f), 18);
+		Footer->SetJustification(ETextJustify::Center);
+		if (UCanvasPanelSlot* FooterSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Footer))
+		{
+			FooterSlot->SetAnchors(FAnchors(0.5f, 0.64f));
+			FooterSlot->SetAlignment(FVector2D(0.5f, 0.f));
+			FooterSlot->SetAutoSize(true);
+			FooterSlot->SetZOrder(22);
+		}
+		Footer->SetVisibility(ESlateVisibility::Hidden);
+		EndFooterBlock = Footer;
+	}
 
 	return Super::RebuildWidget();
 }
@@ -125,10 +155,6 @@ void UAfterlightHUDWidget::SetCineMode(bool bEnabled)
 	{
 		DebugBlock->SetVisibility((bEnabled || !bDebugVisible) ? ESlateVisibility::Hidden : ESlateVisibility::HitTestInvisible);
 	}
-	if (PromptBlock.IsValid() && !bDialogueVisible)
-	{
-		PromptBlock->SetVisibility(bEnabled ? ESlateVisibility::Hidden : ESlateVisibility::HitTestInvisible);
-	}
 }
 
 void UAfterlightHUDWidget::SetPrompt(const FText& Text)
@@ -137,7 +163,7 @@ void UAfterlightHUDWidget::SetPrompt(const FText& Text)
 	{
 		return;
 	}
-	const bool bShow = !Text.IsEmpty() && !bCineMode && !bDialogueVisible;
+	const bool bShow = !Text.IsEmpty() && !bDialogueVisible && !bHoldCard;
 	PromptBlock->SetText(Text);
 	PromptBlock->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
 }
@@ -147,23 +173,24 @@ void UAfterlightHUDWidget::SetDialogue(FName SpeakerId, const FText& Line, const
 	bDialogueVisible = true;
 	if (DialogueBlock.IsValid())
 	{
-		const FString Body = SpeakerId.IsNone() ? Line.ToString() : FString::Printf(TEXT("%s: %s"), *SpeakerId.ToString(), *Line.ToString());
+		const FString Body = SpeakerId.IsNone() || SpeakerId == TEXT("Recording")
+			? Line.ToString()
+			: FString::Printf(TEXT("%s\n%s"), *SpeakerId.ToString(), *Line.ToString());
 		DialogueBlock->SetText(FText::FromString(Body));
 		DialogueBlock->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 	if (ChoiceBlock.IsValid())
 	{
-		FString ChoiceLines;
-		for (int32 i = 0; i < Choices.Num(); ++i)
-		{
-			ChoiceLines += FString::Printf(TEXT("[%d] %s\n"), i + 1, *Choices[i].ToString());
-		}
-		ChoiceBlock->SetText(FText::FromString(ChoiceLines));
-		ChoiceBlock->SetVisibility(ESlateVisibility::HitTestInvisible);
+		ChoiceBlock->SetText(FText::FromString(FAfterlightPresentationFormat::FormatChoiceList(Choices)));
+		ChoiceBlock->SetVisibility(Choices.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
 	}
 	if (PromptBlock.IsValid())
 	{
 		PromptBlock->SetVisibility(ESlateVisibility::Hidden);
+	}
+	if (GuidanceBlock.IsValid() && !bHoldCard)
+	{
+		GuidanceBlock->SetVisibility(ESlateVisibility::Hidden);
 	}
 }
 
@@ -210,11 +237,62 @@ void UAfterlightHUDWidget::SetTitle(const FText& Text)
 	}
 	TitleBlock->SetText(Text);
 	TitleBlock->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+	if (!bShow && EndFooterBlock.IsValid())
+	{
+		EndFooterBlock->SetVisibility(ESlateVisibility::Hidden);
+	}
 }
 
 void UAfterlightHUDWidget::HideTitle()
 {
 	SetTitle(FText::GetEmpty());
+}
+
+void UAfterlightHUDWidget::SetTitleScrimVisible(bool bVisible)
+{
+	if (TitleScrim.IsValid())
+	{
+		TitleScrim->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+	}
+	if (TitleBlock.IsValid() && bVisible)
+	{
+		TitleBlock->SetVisibility(ESlateVisibility::Hidden);
+	}
+}
+
+void UAfterlightHUDWidget::SetGuidance(const FText& Text)
+{
+	if (!GuidanceBlock.IsValid())
+	{
+		return;
+	}
+	const bool bShow = !Text.IsEmpty();
+	GuidanceBlock->SetText(Text);
+	GuidanceBlock->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+}
+
+void UAfterlightHUDWidget::SetEndFooter(const FText& Text)
+{
+	if (!EndFooterBlock.IsValid())
+	{
+		return;
+	}
+	const bool bShow = !Text.IsEmpty();
+	EndFooterBlock->SetText(Text);
+	EndFooterBlock->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+}
+
+void UAfterlightHUDWidget::SetHoldCard(bool bHold)
+{
+	bHoldCard = bHold;
+	if (bHold && PromptBlock.IsValid())
+	{
+		PromptBlock->SetVisibility(ESlateVisibility::Hidden);
+	}
+	if (!bHold && EndFooterBlock.IsValid())
+	{
+		EndFooterBlock->SetVisibility(ESlateVisibility::Hidden);
+	}
 }
 
 void UAfterlightHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)

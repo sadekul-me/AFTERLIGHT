@@ -13,7 +13,7 @@ AAfterlightCompanionCharacter::AAfterlightCompanionCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	GetCapsuleComponent()->InitCapsuleSize(40.f, 88.f);
-	GetCharacterMovement()->MaxWalkSpeed = 180.f;
+	GetCharacterMovement()->MaxWalkSpeed = 165.f;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 	bUseControllerRotationYaw = false;
 
@@ -49,6 +49,7 @@ void AAfterlightCompanionCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdatePath(DeltaSeconds);
+	UpdatePresence(DeltaSeconds);
 	UpdateFacing(DeltaSeconds);
 }
 
@@ -58,6 +59,7 @@ void AAfterlightCompanionCharacter::SetLeadPath(const TArray<FVector>& Points, b
 	PathIndex = 0;
 	bWaitForPlayer = bInWaitForPlayer;
 	bWaitingForPlayer = false;
+	PathPause = 0.f;
 }
 
 void AAfterlightCompanionCharacter::ClearLeadPath()
@@ -65,11 +67,28 @@ void AAfterlightCompanionCharacter::ClearLeadPath()
 	PathPoints.Reset();
 	PathIndex = 0;
 	bWaitingForPlayer = false;
+	PathPause = 0.f;
 }
 
 void AAfterlightCompanionCharacter::SetMoveEnabled(bool bEnabled)
 {
 	bMoveEnabled = bEnabled;
+}
+
+void AAfterlightCompanionCharacter::SetWorldLookTargets(const TArray<FVector>& Points)
+{
+	WorldLookTargets = Points;
+}
+
+void AAfterlightCompanionCharacter::SetPreferPlayerLook(bool bPreferPlayer)
+{
+	bPreferPlayerLook = bPreferPlayer;
+}
+
+void AAfterlightCompanionCharacter::GlanceAt(const FVector& WorldLocation)
+{
+	GlanceLocation = WorldLocation;
+	GlanceHold = 1.6f;
 }
 
 bool AAfterlightCompanionCharacter::HasReachedPathEnd() const
@@ -85,13 +104,23 @@ void AAfterlightCompanionCharacter::UpdatePath(float DeltaSeconds)
 		return;
 	}
 
+	if (PathPause > 0.f)
+	{
+		PathPause -= DeltaSeconds;
+		return;
+	}
+
 	APawn* Protagonist = ResolveProtagonist();
 	if (bWaitForPlayer && Protagonist)
 	{
 		const float Dist = FVector::Dist2D(GetActorLocation(), Protagonist->GetActorLocation());
-		bWaitingForPlayer = Dist > CurrentFollowDistance + 220.f;
+		bWaitingForPlayer = Dist > CurrentFollowDistance + 120.f;
 		if (bWaitingForPlayer)
 		{
+			if (GlanceHold <= 0.f)
+			{
+				GlanceAt(Protagonist->GetActorLocation() + FVector(0.f, 0.f, 70.f));
+			}
 			return;
 		}
 	}
@@ -105,25 +134,58 @@ void AAfterlightCompanionCharacter::UpdatePath(float DeltaSeconds)
 	if (To.SizeSquared2D() < 80.f * 80.f)
 	{
 		++PathIndex;
+		PathPause = 0.42f;
+		if (WorldLookTargets.Num() > 0)
+		{
+			GlanceAt(WorldLookTargets[PresenceLookIndex % WorldLookTargets.Num()]);
+		}
 		return;
 	}
 	AddMovementInput(FVector(To.X, To.Y, 0.f).GetSafeNormal(), 1.f);
 }
 
+void AAfterlightCompanionCharacter::UpdatePresence(float DeltaSeconds)
+{
+	if (GlanceHold > 0.f)
+	{
+		GlanceHold -= DeltaSeconds;
+		return;
+	}
+	PresenceTimer -= DeltaSeconds;
+	if (PresenceTimer > 0.f)
+	{
+		return;
+	}
+	PresenceTimer = bPreferPlayerLook ? 3.4f : 4.6f;
+	APawn* Protagonist = ResolveProtagonist();
+	const bool bUsePlayer = Protagonist && (bWaitingForPlayer || bInDialogue || (bPreferPlayerLook && (PresenceLookIndex % 3) != 2));
+	if (bUsePlayer)
+	{
+		GlanceAt(Protagonist->GetActorLocation() + FVector(0.f, 0.f, 70.f));
+	}
+	else if (WorldLookTargets.Num() > 0)
+	{
+		GlanceAt(WorldLookTargets[PresenceLookIndex % WorldLookTargets.Num()]);
+	}
+	++PresenceLookIndex;
+}
+
 void AAfterlightCompanionCharacter::UpdateFacing(float DeltaSeconds)
 {
-	FVector LookAt = FVector::ZeroVector;
-	bool bLook = false;
-	if (!HasReachedPathEnd())
+	FVector LookAt = GlanceLocation;
+	bool bLook = GlanceHold > 0.f;
+	if (!HasReachedPathEnd() && !bWaitingForPlayer && GlanceHold <= 0.f)
 	{
 		LookAt = PathPoints[PathIndex];
 		bLook = true;
 	}
-	else if (APawn* Protagonist = ResolveProtagonist())
+	else if (!bLook)
 	{
-		LookAt = Protagonist->GetActorLocation();
-		const FVector ToPlayer = LookAt - GetActorLocation();
-		bLook = bInDialogue || ToPlayer.Size2D() < CurrentFollowDistance + 80.f;
+		if (APawn* Protagonist = ResolveProtagonist())
+		{
+			LookAt = Protagonist->GetActorLocation();
+			bLook = bInDialogue || FVector::Dist2D(LookAt, GetActorLocation()) < CurrentFollowDistance + 80.f;
+		}
 	}
 	if (!bLook)
 	{
@@ -135,7 +197,7 @@ void AAfterlightCompanionCharacter::UpdateFacing(float DeltaSeconds)
 		return;
 	}
 	const FRotator Target = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), LookAt);
-	const FRotator NewRot = FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Target.Yaw, 0.f), DeltaSeconds, 4.f);
+	const FRotator NewRot = FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Target.Yaw, 0.f), DeltaSeconds, 2.4f);
 	SetActorRotation(NewRot);
 }
 
@@ -177,10 +239,12 @@ void AAfterlightCompanionCharacter::ApplyPresentationTags(const FGameplayTagCont
 	if (PresentationTags.HasTag(AfterlightTags::Companion_Follow_Close))
 	{
 		CurrentFollowDistance = CloseFollowDistance;
+		bPreferPlayerLook = true;
 	}
 	else if (PresentationTags.HasTag(AfterlightTags::Companion_Follow_Far))
 	{
 		CurrentFollowDistance = FarFollowDistance;
+		bPreferPlayerLook = false;
 	}
 	else
 	{

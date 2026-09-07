@@ -37,6 +37,7 @@ protected:
 	FVector SweepEnd = FVector::ZeroVector;
 	float SweepDuration = 8.f;
 	float SweepElapsed = 0.f;
+	float ScanYaw = 0.f;
 	bool bSweeping = false;
 	bool bFinished = false;
 };
