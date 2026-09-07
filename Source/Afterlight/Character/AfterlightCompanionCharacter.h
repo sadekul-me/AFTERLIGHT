@@ -32,8 +32,15 @@ public:
 	float GetFollowDistance() const { return CurrentFollowDistance; }
 	UAfterlightFramingTargetsComponent* GetFramingTargets() const { return Framing; }
 
+	void SetLeadPath(const TArray<FVector>& Points, bool bWaitForPlayer);
+	void ClearLeadPath();
+	void SetMoveEnabled(bool bEnabled);
+	bool HasReachedPathEnd() const;
+	bool IsWaitingForPlayer() const { return bWaitingForPlayer; }
+
 protected:
 	void UpdateFacing(float DeltaSeconds);
+	void UpdatePath(float DeltaSeconds);
 	APawn* ResolveProtagonist() const;
 
 	UPROPERTY(VisibleAnywhere, Category = "Afterlight")
@@ -53,4 +60,9 @@ protected:
 
 	float CurrentFollowDistance = 200.f;
 	bool bInDialogue = false;
+	bool bMoveEnabled = true;
+	bool bWaitForPlayer = true;
+	bool bWaitingForPlayer = false;
+	TArray<FVector> PathPoints;
+	int32 PathIndex = 0;
 };

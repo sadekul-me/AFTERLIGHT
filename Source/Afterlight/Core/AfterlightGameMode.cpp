@@ -2,6 +2,7 @@
 #include "Character/AfterlightCharacter.h"
 #include "Character/AfterlightPlayerController.h"
 #include "Cinematic/AfterlightLabDirector.h"
+#include "Slice/AfterlightSlice01Director.h"
 #include "EngineUtils.h"
 #include "GameFramework/HUD.h"
 
@@ -15,13 +16,19 @@ AAfterlightGameMode::AAfterlightGameMode()
 void AAfterlightGameMode::BeginPlay()
 {
 	Super::BeginPlay();
-	bool bHasDirector = false;
+	bool bHasLabDirector = false;
+	bool bHasSliceDirector = false;
 	for (TActorIterator<AAfterlightLabDirector> It(GetWorld()); It; ++It)
 	{
-		bHasDirector = true;
+		bHasLabDirector = true;
 		break;
 	}
-	if (!bHasDirector)
+	for (TActorIterator<AAfterlightSlice01Director> It(GetWorld()); It; ++It)
+	{
+		bHasSliceDirector = true;
+		break;
+	}
+	if (!bHasLabDirector && !bHasSliceDirector)
 	{
 		GetWorld()->SpawnActor<AAfterlightLabDirector>();
 	}

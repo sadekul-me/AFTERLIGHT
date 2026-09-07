@@ -7,6 +7,7 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Engine/World.h"
 
 AAfterlightCompanionCharacter::AAfterlightCompanionCharacter()
 {
@@ -47,27 +48,93 @@ APawn* AAfterlightCompanionCharacter::ResolveProtagonist() const
 void AAfterlightCompanionCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdatePath(DeltaSeconds);
 	UpdateFacing(DeltaSeconds);
+}
+
+void AAfterlightCompanionCharacter::SetLeadPath(const TArray<FVector>& Points, bool bInWaitForPlayer)
+{
+	PathPoints = Points;
+	PathIndex = 0;
+	bWaitForPlayer = bInWaitForPlayer;
+	bWaitingForPlayer = false;
+}
+
+void AAfterlightCompanionCharacter::ClearLeadPath()
+{
+	PathPoints.Reset();
+	PathIndex = 0;
+	bWaitingForPlayer = false;
+}
+
+void AAfterlightCompanionCharacter::SetMoveEnabled(bool bEnabled)
+{
+	bMoveEnabled = bEnabled;
+}
+
+bool AAfterlightCompanionCharacter::HasReachedPathEnd() const
+{
+	return PathPoints.Num() == 0 || PathIndex >= PathPoints.Num();
+}
+
+void AAfterlightCompanionCharacter::UpdatePath(float DeltaSeconds)
+{
+	if (!bMoveEnabled || HasReachedPathEnd())
+	{
+		bWaitingForPlayer = false;
+		return;
+	}
+
+	APawn* Protagonist = ResolveProtagonist();
+	if (bWaitForPlayer && Protagonist)
+	{
+		const float Dist = FVector::Dist2D(GetActorLocation(), Protagonist->GetActorLocation());
+		bWaitingForPlayer = Dist > CurrentFollowDistance + 220.f;
+		if (bWaitingForPlayer)
+		{
+			return;
+		}
+	}
+	else
+	{
+		bWaitingForPlayer = false;
+	}
+
+	const FVector Target = PathPoints[PathIndex];
+	const FVector To = Target - GetActorLocation();
+	if (To.SizeSquared2D() < 80.f * 80.f)
+	{
+		++PathIndex;
+		return;
+	}
+	AddMovementInput(FVector(To.X, To.Y, 0.f).GetSafeNormal(), 1.f);
 }
 
 void AAfterlightCompanionCharacter::UpdateFacing(float DeltaSeconds)
 {
-	APawn* Protagonist = ResolveProtagonist();
-	if (!Protagonist)
+	FVector LookAt = FVector::ZeroVector;
+	bool bLook = false;
+	if (!HasReachedPathEnd())
+	{
+		LookAt = PathPoints[PathIndex];
+		bLook = true;
+	}
+	else if (APawn* Protagonist = ResolveProtagonist())
+	{
+		LookAt = Protagonist->GetActorLocation();
+		const FVector ToPlayer = LookAt - GetActorLocation();
+		bLook = bInDialogue || ToPlayer.Size2D() < CurrentFollowDistance + 80.f;
+	}
+	if (!bLook)
 	{
 		return;
 	}
-	const FVector ToPlayer = Protagonist->GetActorLocation() - GetActorLocation();
-	if (ToPlayer.SizeSquared2D() < 1.f)
+	const FVector To = LookAt - GetActorLocation();
+	if (To.SizeSquared2D() < 1.f)
 	{
 		return;
 	}
-	const bool bShouldLook = bInDialogue || ToPlayer.Size2D() < CurrentFollowDistance + 80.f;
-	if (!bShouldLook)
-	{
-		return;
-	}
-	const FRotator Target = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), Protagonist->GetActorLocation());
+	const FRotator Target = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), LookAt);
 	const FRotator NewRot = FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Target.Yaw, 0.f), DeltaSeconds, 4.f);
 	SetActorRotation(NewRot);
 }
