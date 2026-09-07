@@ -7,6 +7,8 @@
 #include "Core/AfterlightGameplayTags.h"
 #include "Camera/AfterlightCameraRecipe.h"
 #include "Cinematic/AfterlightCinematicSession.h"
+#include "Cinematic/AfterlightLevelSequenceFactory.h"
+#include "LevelSequence.h"
 #include "Character/AfterlightPlayerController.h"
 
 #if WITH_AUTOMATION_TESTS
@@ -147,6 +149,88 @@ bool FAfterlightCameraRecipeDefaultsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Dialogue uses target focus"), Dialogue && Dialogue->FocusMode == EAfterlightCameraFocusMode::Target);
 	TestTrue(TEXT("Explore keeps gameplay FOV cinematic"), Explore && Explore->GameplayFOV < 70.f);
 	TestTrue(TEXT("Explore blend is not instant"), Explore && Explore->BlendTime >= 0.5f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightSlice01ChoiceOutcomesTest, "Afterlight.Slice01.ChoiceOutcomes", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightSlice01ChoiceOutcomesTest::RunTest(const FString& Parameters)
+{
+	FAfterlightRelationshipState FollowIn;
+	const FAfterlightRelationshipState FollowOut = FAfterlightRelationshipMath::ApplyDelta(FollowIn, 0.25f, 0.f);
+	TestEqual(TEXT("Walk Trust is 0.75"), FollowOut.Trust, 0.75f);
+	TestEqual(TEXT("Walk Suspicion stays 0"), FollowOut.Suspicion, 0.f);
+	const FGameplayTagContainer FollowTags = FAfterlightRelationshipMath::EvaluateThresholdTags(FollowOut, FAfterlightRelationshipThresholds());
+	TestTrue(TEXT("Walk is close follow"), FollowTags.HasTag(AfterlightTags::Companion_Follow_Close));
+
+	FAfterlightRelationshipState QuestionIn;
+	const FAfterlightRelationshipState QuestionOut = FAfterlightRelationshipMath::ApplyDelta(QuestionIn, 0.f, 0.65f);
+	TestEqual(TEXT("Question Suspicion is 0.65"), QuestionOut.Suspicion, 0.65f);
+	TestEqual(TEXT("Question Trust stays 0.5"), QuestionOut.Trust, 0.5f);
+	const FGameplayTagContainer QuestionTags = FAfterlightRelationshipMath::EvaluateThresholdTags(QuestionOut, FAfterlightRelationshipThresholds());
+	TestTrue(TEXT("Question is far follow"), QuestionTags.HasTag(AfterlightTags::Companion_Follow_Far));
+	TestFalse(TEXT("Choice flags are distinct"), AfterlightTags::Story_Slice01_ChoseFollow.GetTag() == AfterlightTags::Story_Slice01_ChoseQuestion.GetTag());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightSlice01FlagProgressionTest, "Afterlight.Slice01.FlagProgression", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightSlice01FlagProgressionTest::RunTest(const FString& Parameters)
+{
+	FAfterlightNarrativeState State;
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_Woke);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_MetMaya);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_ChoseFollow);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_EnteredCut);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_SweepPassed);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_ReachedBolt);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_QuietBeat);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_FoundTin);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_HeardWarning);
+	State.StoryFlags.AddTag(AfterlightTags::Story_Slice01_Complete);
+	TestTrue(TEXT("Final state reachable"), State.StoryFlags.HasTag(AfterlightTags::Story_Slice01_Complete));
+	TestTrue(TEXT("Tin reached"), State.StoryFlags.HasTag(AfterlightTags::Story_Slice01_FoundTin));
+	TestFalse(TEXT("Follow and Question stay mutex unless both granted"), State.StoryFlags.HasTag(AfterlightTags::Story_Slice01_ChoseQuestion));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightDialogueLinearAdvanceTest, "Afterlight.Narrative.DialogueLinearAdvance", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightDialogueLinearAdvanceTest::RunTest(const FString& Parameters)
+{
+	UAfterlightDialogueAsset* Asset = NewObject<UAfterlightDialogueAsset>();
+	Asset->EntryNodeId = TEXT("A");
+	FAfterlightDialogueNode A;
+	A.NodeId = TEXT("A");
+	A.Line = FText::FromString(TEXT("Don't look at the posts."));
+	A.NextNodeId = TEXT("B");
+	A.bKeepGameplayInput = true;
+	FAfterlightDialogueNode B;
+	B.NodeId = TEXT("B");
+	B.Line = FText::FromString(TEXT("They don't stay dead."));
+	B.NextNodeId = TEXT("Done");
+	Asset->Nodes.Add(A);
+	Asset->Nodes.Add(B);
+
+	UAfterlightDialogueRunner* Runner = NewObject<UAfterlightDialogueRunner>();
+	Runner->Start(Asset);
+	TestTrue(TEXT("Linear node stays active"), Runner->IsActive());
+	TestTrue(TEXT("Walk-and-talk keeps gameplay input"), Runner->ShouldKeepGameplayInput());
+	TestTrue(TEXT("Advance to second line"), Runner->Advance());
+	TestTrue(TEXT("Terminal hold stays active"), Runner->IsActive());
+	TestTrue(TEXT("Missing Done node finishes"), Runner->Advance());
+	TestFalse(TEXT("Finished after last hold"), Runner->IsActive());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightWarningSequenceNameTest, "Afterlight.Slice01.WarningSequenceName", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightWarningSequenceNameTest::RunTest(const FString& Parameters)
+{
+	ULevelSequence* Sequence = UAfterlightLevelSequenceFactory::CreateWarningSequence(GetTransientPackage(), nullptr, 18.f);
+	TestTrue(TEXT("Warning sequence created"), Sequence != nullptr);
+	TestEqual(TEXT("Sequence is named LS_Slice01_Warning"), Sequence ? Sequence->GetFName() : NAME_None, FName(TEXT("LS_Slice01_Warning")));
+	FAfterlightCinematicSession Session;
+	Session.Begin(Sequence ? Sequence->GetFName() : NAME_None, EAfterlightCameraRegister::Intimate);
+	TestTrue(TEXT("Warning session owns Sequencer"), Session.bActive && Session.Authority == EAfterlightCameraAuthority::Sequencer);
+	TestTrue(TEXT("Release is idempotent"), Session.Complete());
+	TestFalse(TEXT("Released session is inactive"), Session.bActive);
 	return true;
 }
 

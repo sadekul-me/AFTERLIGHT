@@ -42,11 +42,13 @@ AFTERLIGHT is a premium cinematic narrative sci-fi/cyberpunk game.
 
 See `docs/implementation/cinematic-camera-spike.md` for the camera authority model.
 
-## Vertical slice (design only)
+## Vertical slice (Pass 1 greybox)
 
-Narrative package for the first 7–9 minute playable-cinema slice lives under `docs/narrative/` and `docs/production/`. It is **not implemented** in Unreal yet. Do not treat `L_Dev_CinematicLab` as the story map.
+Playable map: `Content/Environments/Slice01/L_Slice01_Greybox` (`AAfterlightSlice01Director`).
 
-Start: `docs/narrative/vertical-slice-story-bible.md`
+Systems gym (unchanged): `Content/Environments/Slice01/L_Dev_CinematicLab`.
+
+See `docs/implementation/vertical-slice-pass1.md`.
 
 ## Intentionally not implemented
 
