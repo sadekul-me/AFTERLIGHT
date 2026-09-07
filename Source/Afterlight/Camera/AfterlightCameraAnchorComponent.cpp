@@ -14,6 +14,10 @@ void UAfterlightCameraAnchorComponent::BeginPlay()
 		if (UAfterlightCameraSubsystem* Camera = World->GetSubsystem<UAfterlightCameraSubsystem>())
 		{
 			Camera->RegisterAnchor(Register, GetOwner());
+			if (!ShotId.IsNone())
+			{
+				Camera->RegisterShot(ShotId, GetOwner());
+			}
 		}
 	}
 }

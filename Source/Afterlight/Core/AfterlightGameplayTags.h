@@ -8,10 +8,13 @@ namespace AfterlightTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Dialogue);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Threat);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Cinematic);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Intimate);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Camera_Register_Reveal);
 
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Full);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Constrained);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Locked);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Scripted);
 
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cinematic_Active);
 

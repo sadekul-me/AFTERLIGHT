@@ -6,6 +6,8 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "Interaction/AfterlightInteractionComponent.h"
+#include "Camera/AfterlightFramingTargetsComponent.h"
+#include "Camera/AfterlightCameraRecipe.h"
 #include "Core/AfterlightPlayerContextSubsystem.h"
 
 AAfterlightCharacter::AAfterlightCharacter()
@@ -27,18 +29,26 @@ AAfterlightCharacter::AAfterlightCharacter()
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 280.f;
+	CameraBoom->TargetArmLength = 360.f;
 	CameraBoom->bUsePawnControlRotation = true;
-	CameraBoom->SocketOffset = FVector(0.f, 40.f, 40.f);
+	CameraBoom->SocketOffset = FVector(0.f, 52.f, 52.f);
+	CameraBoom->bDoCollisionTest = true;
+	CameraBoom->ProbeSize = 16.f;
 	CameraBoom->bEnableCameraLag = true;
-	CameraBoom->CameraLagSpeed = 8.f;
+	CameraBoom->CameraLagSpeed = 5.5f;
+	CameraBoom->bEnableCameraRotationLag = true;
+	CameraBoom->CameraRotationLagSpeed = 9.f;
+	CameraBoom->CameraLagMaxDistance = 80.f;
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
-	FollowCamera->FieldOfView = 70.f;
+	FollowCamera->FieldOfView = 58.f;
 
 	Interaction = CreateDefaultSubobject<UAfterlightInteractionComponent>(TEXT("Interaction"));
+
+	Framing = CreateDefaultSubobject<UAfterlightFramingTargetsComponent>(TEXT("Framing"));
+	Framing->SetupAttachment(GetCapsuleComponent());
 }
 
 void AAfterlightCharacter::BeginPlay()
@@ -110,4 +120,19 @@ void AAfterlightCharacter::SetMoveEnabled(bool bEnabled)
 void AAfterlightCharacter::SetLookEnabled(bool bEnabled)
 {
 	bLookEnabled = bEnabled;
+}
+
+void AAfterlightCharacter::ApplyExploreRecipe(const UAfterlightCameraRecipe* Recipe)
+{
+	if (!Recipe || !CameraBoom || !FollowCamera)
+	{
+		return;
+	}
+	CameraBoom->TargetArmLength = Recipe->ArmLength;
+	CameraBoom->SocketOffset = FVector(0.f, 52.f * Recipe->ShoulderSide, Recipe->CameraHeight);
+	CameraBoom->CameraLagSpeed = Recipe->MovementLag;
+	CameraBoom->CameraRotationLagSpeed = Recipe->RotationLag;
+	CameraBoom->bEnableCameraLag = Recipe->MovementLag > 0.1f;
+	CameraBoom->bEnableCameraRotationLag = Recipe->RotationLag > 0.1f;
+	FollowCamera->FieldOfView = Recipe->GameplayFOV;
 }

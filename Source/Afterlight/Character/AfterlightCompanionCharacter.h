@@ -7,6 +7,7 @@
 #include "AfterlightCompanionCharacter.generated.h"
 
 class UAfterlightInteractableComponent;
+class UAfterlightFramingTargetsComponent;
 
 UCLASS()
 class AFTERLIGHT_API AAfterlightCompanionCharacter : public ACharacter, public IAfterlightInteractable, public IAfterlightCompanion
@@ -29,6 +30,7 @@ public:
 	virtual void ApplyPresentationTags(const FGameplayTagContainer& PresentationTags) override;
 
 	float GetFollowDistance() const { return CurrentFollowDistance; }
+	UAfterlightFramingTargetsComponent* GetFramingTargets() const { return Framing; }
 
 protected:
 	void UpdateFacing(float DeltaSeconds);
@@ -36,6 +38,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Afterlight")
 	TObjectPtr<UAfterlightInteractableComponent> Interactable;
+
+	UPROPERTY(VisibleAnywhere, Category = "Afterlight")
+	TObjectPtr<UAfterlightFramingTargetsComponent> Framing;
 
 	UPROPERTY(EditAnywhere, Category = "Afterlight")
 	float CloseFollowDistance = 140.f;

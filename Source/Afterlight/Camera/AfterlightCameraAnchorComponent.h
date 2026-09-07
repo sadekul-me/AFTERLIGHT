@@ -16,4 +16,7 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Afterlight")
 	EAfterlightCameraRegister Register = EAfterlightCameraRegister::Dialogue;
+
+	UPROPERTY(EditAnywhere, Category = "Afterlight")
+	FName ShotId = NAME_None;
 };

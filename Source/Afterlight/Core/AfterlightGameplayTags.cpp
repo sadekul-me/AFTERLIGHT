@@ -6,10 +6,13 @@ namespace AfterlightTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Camera_Register_Dialogue, "Camera.Register.Dialogue", "Conversation framing camera");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Camera_Register_Threat, "Camera.Register.Threat", "Pressure/threat camera");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Camera_Register_Cinematic, "Camera.Register.Cinematic", "Sequencer/cinematic camera");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Camera_Register_Intimate, "Camera.Register.Intimate", "Tight emotional framing");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Camera_Register_Reveal, "Camera.Register.Reveal", "Deliberate reveal composition");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Full, "Input.Full", "Full gameplay input");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Constrained, "Input.Constrained", "Look/choices only");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Locked, "Input.Locked", "Gameplay input locked");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Scripted, "Input.Scripted", "Camera-driven scripted hold without Sequencer");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cinematic_Active, "Cinematic.Active", "Cinematic coordinator holds control");
 

@@ -7,6 +7,8 @@
 class USpringArmComponent;
 class UCameraComponent;
 class UAfterlightInteractionComponent;
+class UAfterlightFramingTargetsComponent;
+class UAfterlightCameraRecipe;
 class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
@@ -24,6 +26,8 @@ public:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 	UAfterlightInteractionComponent* GetInteractionComponent() const { return Interaction; }
+	UAfterlightFramingTargetsComponent* GetFramingTargets() const { return Framing; }
+	void ApplyExploreRecipe(const UAfterlightCameraRecipe* Recipe);
 
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
@@ -40,6 +44,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Afterlight")
 	TObjectPtr<UAfterlightInteractionComponent> Interaction;
+
+	UPROPERTY(VisibleAnywhere, Category = "Afterlight")
+	TObjectPtr<UAfterlightFramingTargetsComponent> Framing;
 
 	UPROPERTY(EditAnywhere, Category = "Afterlight|Input")
 	TObjectPtr<UInputMappingContext> MappingContext;

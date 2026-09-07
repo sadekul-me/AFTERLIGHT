@@ -1,5 +1,6 @@
 #include "Character/AfterlightCompanionCharacter.h"
 #include "Interaction/AfterlightInteractableComponent.h"
+#include "Camera/AfterlightFramingTargetsComponent.h"
 #include "Core/AfterlightGameplayTags.h"
 #include "Core/AfterlightPlayerContextSubsystem.h"
 #include "Character/AfterlightCharacter.h"
@@ -18,6 +19,9 @@ AAfterlightCompanionCharacter::AAfterlightCompanionCharacter()
 	Interactable = CreateDefaultSubobject<UAfterlightInteractableComponent>(TEXT("Interactable"));
 	Interactable->PromptText = NSLOCTEXT("Afterlight", "TalkPrompt", "Talk");
 	Interactable->Verb = AfterlightTags::Interaction_Talk;
+
+	Framing = CreateDefaultSubobject<UAfterlightFramingTargetsComponent>(TEXT("Framing"));
+	Framing->SetupAttachment(GetCapsuleComponent());
 }
 
 void AAfterlightCompanionCharacter::BeginPlay()
