@@ -1,0 +1,78 @@
+# AFTERLIGHT — Unreal Engine 5.8.2 C++ project
+# Ignore generated/local output only. Keep Source, Config, Content, Plugins, and project files.
+
+# Unreal generated
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+
+# Cooked / packaged output
+Cooked/
+Packaged/
+Releases/
+Dist/
+Packages/
+
+# Movie Render Queue / capture output
+MovieRenders/
+MovieRenderQueue/
+Saved/MovieRenders/
+Saved/Cinematics/
+
+# Autosaves and local caches
+*_BuiltData.uasset
+*.autosave
+
+# Logs and crash dumps
+*.log
+*.dmp
+*.mdmp
+crashinfo.txt
+
+# Generated Visual Studio / Unreal solution files
+*.sln
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.VC.db
+*.VC.VC.opendb
+*.opendb
+*.opensdf
+*.sdf
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.xcodeproj/
+*.xcworkspace/
+Makefile
+CMakeFiles/
+
+# IDE / editor local
+.vs/
+.idea/
+.vscode/
+*.code-workspace
+
+# Generated compiler / linker artifacts (not source meshes)
+*.pdb
+*.idb
+*.ilk
+*.exp
+*.obj.rsp
+
+# OS / temp
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
+*.temp
+*.bak
+*~
+
+# Python local
+__pycache__/
+*.pyc
