@@ -1,0 +1,118 @@
+#include "Misc/AutomationTest.h"
+#include "Relationship/AfterlightRelationshipTypes.h"
+#include "Narrative/AfterlightNarrativeTypes.h"
+#include "Narrative/AfterlightBeatAsset.h"
+#include "Narrative/AfterlightDialogueAsset.h"
+#include "Narrative/AfterlightDialogueRunner.h"
+#include "Core/AfterlightGameplayTags.h"
+#include "Camera/AfterlightCameraRecipe.h"
+
+#if WITH_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightRelationshipDeltaTest, "Afterlight.Relationship.ApplyDelta", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightRelationshipDeltaTest::RunTest(const FString& Parameters)
+{
+	FAfterlightRelationshipState In;
+	In.Trust = 0.5f;
+	In.Suspicion = 0.1f;
+	const FAfterlightRelationshipState Out = FAfterlightRelationshipMath::ApplyDelta(In, 0.2f, 0.3f);
+	TestEqual(TEXT("Trust increased"), Out.Trust, 0.7f);
+	TestEqual(TEXT("Suspicion increased"), Out.Suspicion, 0.4f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightRelationshipClampTest, "Afterlight.Relationship.Clamp", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightRelationshipClampTest::RunTest(const FString& Parameters)
+{
+	FAfterlightRelationshipState In;
+	In.Trust = 0.9f;
+	In.Suspicion = 0.05f;
+	const FAfterlightRelationshipState Out = FAfterlightRelationshipMath::ApplyDelta(In, 0.5f, -1.f);
+	TestEqual(TEXT("Trust clamped to 1"), Out.Trust, 1.f);
+	TestEqual(TEXT("Suspicion clamped to 0"), Out.Suspicion, 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightRelationshipThresholdTest, "Afterlight.Relationship.ThresholdTags", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightRelationshipThresholdTest::RunTest(const FString& Parameters)
+{
+	FAfterlightRelationshipState State;
+	State.Trust = 0.8f;
+	State.Suspicion = 0.f;
+	const FGameplayTagContainer Tags = FAfterlightRelationshipMath::EvaluateThresholdTags(State, FAfterlightRelationshipThresholds());
+	TestTrue(TEXT("High trust tag"), Tags.HasTag(AfterlightTags::Relationship_Trust_High));
+	TestTrue(TEXT("Close follow tag"), Tags.HasTag(AfterlightTags::Companion_Follow_Close));
+	TestFalse(TEXT("No high suspicion"), Tags.HasTag(AfterlightTags::Relationship_Suspicion_High));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightBeatRequirementTest, "Afterlight.Narrative.BeatRequirements", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightBeatRequirementTest::RunTest(const FString& Parameters)
+{
+	UAfterlightBeatAsset* Beat = NewObject<UAfterlightBeatAsset>();
+	Beat->RequiredFlags.AddTag(AfterlightTags::Story_Test_MetCompanion);
+	FGameplayTagContainer Empty;
+	FGameplayTagContainer Ready;
+	Ready.AddTag(AfterlightTags::Story_Test_MetCompanion);
+	TestFalse(TEXT("Blocked without flag"), Beat->AreRequirementsMet(Empty));
+	TestTrue(TEXT("Ready with flag"), Beat->AreRequirementsMet(Ready));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightDialogueChoiceTest, "Afterlight.Narrative.DialogueChoice", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightDialogueChoiceTest::RunTest(const FString& Parameters)
+{
+	UAfterlightDialogueAsset* Asset = NewObject<UAfterlightDialogueAsset>();
+	Asset->EntryNodeId = TEXT("Start");
+	FAfterlightDialogueNode Start;
+	Start.NodeId = TEXT("Start");
+	Start.SpeakerId = TEXT("Companion");
+	Start.Line = FText::FromString(TEXT("Can you hear me?"));
+	FAfterlightDialogueChoice Choice;
+	Choice.Text = FText::FromString(TEXT("I'm fine."));
+	Choice.TrustDelta = 0.15f;
+	Choice.NextNodeId = TEXT("Fine");
+	Start.Choices.Add(Choice);
+	FAfterlightDialogueNode Fine;
+	Fine.NodeId = TEXT("Fine");
+	Fine.Line = FText::FromString(TEXT("Stay close."));
+	Asset->Nodes.Add(Start);
+	Asset->Nodes.Add(Fine);
+
+	UAfterlightDialogueRunner* Runner = NewObject<UAfterlightDialogueRunner>();
+	Runner->Start(Asset);
+	TestTrue(TEXT("Dialogue active"), Runner->IsActive());
+	TestTrue(TEXT("Choice 0 valid"), Asset->FindNode(TEXT("Start")) && Asset->FindNode(TEXT("Start"))->Choices[0].TrustDelta == 0.15f);
+	TestTrue(TEXT("Select choice 0"), Runner->SelectChoice(0));
+	TestFalse(TEXT("Finished after follow-up line with no choices"), Runner->IsActive());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightCameraRegisterNameTest, "Afterlight.Camera.RegisterName", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightCameraRegisterNameTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("Explore name"), AfterlightRegisterToName(EAfterlightCameraRegister::Explore), FName(TEXT("Explore")));
+	TestEqual(TEXT("Dialogue name"), AfterlightRegisterToName(EAfterlightCameraRegister::Dialogue), FName(TEXT("Dialogue")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightSaveStateRoundTripTest, "Afterlight.Save.StateRoundTrip", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightSaveStateRoundTripTest::RunTest(const FString& Parameters)
+{
+	FAfterlightNarrativeState Narrative;
+	Narrative.CurrentBeatId = TEXT("Lab.Explore");
+	Narrative.StoryFlags.AddTag(AfterlightTags::Story_Test_InspectedObject);
+	FAfterlightRelationshipState Rel;
+	Rel.Trust = 0.65f;
+	Rel.Suspicion = 0.2f;
+
+	FAfterlightNarrativeState NarrativeCopy = Narrative;
+	FAfterlightRelationshipState RelCopy = Rel;
+	TestEqual(TEXT("Beat preserved"), NarrativeCopy.CurrentBeatId, FName(TEXT("Lab.Explore")));
+	TestTrue(TEXT("Flag preserved"), NarrativeCopy.StoryFlags.HasTag(AfterlightTags::Story_Test_InspectedObject));
+	TestEqual(TEXT("Trust preserved"), RelCopy.Trust, 0.65f);
+	TestEqual(TEXT("Suspicion preserved"), RelCopy.Suspicion, 0.2f);
+	return true;
+}
+
+#endif

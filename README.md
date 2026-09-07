@@ -8,11 +8,26 @@ Premium cinematic narrative sci-fi/cyberpunk game.
 
 - Unreal Engine **5.8.2**
 - Target: Windows PC first (Win64, DX12, single-player vertical slice)
-- Project type: Blank C++ (planned; not created yet)
+- Project type: Blank C++ (`AFTERLIGHT.uproject`, module **Afterlight**)
 
 ## First milestone
 
 A highly polished **5–10 minute Cinematic Vertical Slice**.
+
+This repository currently contains the **engineering foundation**: movement, interaction, companion, dialogue/relationship verbs, thin cinematic camera, HUD-free mode, and a runtime greybox lab.
+
+See:
+
+- `docs/architecture/foundation.md`
+- `docs/implementation/vertical-slice-foundation.md`
+
+## Build / launch
+
+```
+"D:\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat" AFTERLIGHTEditor Win64 Development -Project="D:\Programming\AFTERLIGHT\AFTERLIGHT.uproject"
+```
+
+Open `AFTERLIGHT.uproject` in Unreal Editor 5.8.2.
 
 ## Source control
 
