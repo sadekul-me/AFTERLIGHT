@@ -21,6 +21,8 @@
 #include "Save/AfterlightSaveSubsystem.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
+#include "Cinematic/AfterlightLevelSequenceFactory.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Misc/CommandLine.h"
@@ -88,9 +90,15 @@ void AAfterlightLabDirector::BuildGreybox()
 		Inspectable->SetActorScale3D(FVector(0.8f, 0.8f, 1.2f));
 	}
 
-	SpawnCineCamera(FVector(560.f, 220.f, 150.f), FRotator(-8.f, -20.f, 0.f), EAfterlightCameraRegister::Dialogue);
-	SpawnCineCamera(FVector(1180.f, 200.f, 180.f), FRotator(-12.f, -150.f, 0.f), EAfterlightCameraRegister::Cinematic);
-	SpawnCineCamera(FVector(200.f, -200.f, 160.f), FRotator(-6.f, 30.f, 0.f), EAfterlightCameraRegister::Threat);
+	const FVector CompanionHead(720.f, 40.f, 168.f);
+	const FVector PlayerApproach(540.f, 40.f, 160.f);
+	SpawnShot(AfterlightShotIds::DialogueOTSCompanion, FVector(600.f, 95.f, 158.f), CompanionHead, EAfterlightCameraRegister::Dialogue);
+	SpawnShot(AfterlightShotIds::DialogueOTSProtagonist, FVector(800.f, 110.f, 158.f), PlayerApproach, EAfterlightCameraRegister::Dialogue);
+	SpawnShot(AfterlightShotIds::DialogueTwoShot, FVector(660.f, 280.f, 155.f), FVector(680.f, 40.f, 140.f), EAfterlightCameraRegister::Dialogue);
+	SpawnShot(AfterlightShotIds::DialogueCloseUpCompanion, FVector(678.f, 58.f, 166.f), CompanionHead, EAfterlightCameraRegister::Intimate);
+	RevealCamera = SpawnShot(AfterlightShotIds::RevealInsert, FVector(1120.f, 40.f, 145.f), FVector(1040.f, -160.f, 80.f), EAfterlightCameraRegister::Reveal);
+	SpawnShot(AfterlightShotIds::ThreatPressure, FVector(200.f, -200.f, 160.f), FVector(0.f, 0.f, 120.f), EAfterlightCameraRegister::Threat);
+	BuildInspectSequence();
 
 	if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
 	{
@@ -109,28 +117,35 @@ void AAfterlightLabDirector::BuildGreybox()
 	}
 }
 
-ACineCameraActor* AAfterlightLabDirector::SpawnCineCamera(const FVector& Location, const FRotator& Rotation, EAfterlightCameraRegister Register)
+ACineCameraActor* AAfterlightLabDirector::SpawnShot(FName ShotId, const FVector& Location, const FVector& LookAt, EAfterlightCameraRegister Register)
 {
-	FActorSpawnParameters Params;
-	ACineCameraActor* Camera = GetWorld()->SpawnActor<ACineCameraActor>(Location, Rotation, Params);
+	const FRotator Rotation = UKismetMathLibrary::FindLookAtRotation(Location, LookAt);
+	ACineCameraActor* Camera = GetWorld()->SpawnActor<ACineCameraActor>(Location, Rotation);
 	if (!Camera)
 	{
 		return nullptr;
 	}
 	if (UCineCameraComponent* Cine = Camera->GetCineCameraComponent())
 	{
-		Cine->CurrentFocalLength = Register == EAfterlightCameraRegister::Dialogue ? 50.f : 35.f;
+		Cine->CurrentFocalLength = Register == EAfterlightCameraRegister::Intimate ? 75.f : Register == EAfterlightCameraRegister::Dialogue ? 50.f : 35.f;
 		Cine->CurrentAperture = 2.8f;
 	}
 	UAfterlightCameraAnchorComponent* Anchor = NewObject<UAfterlightCameraAnchorComponent>(Camera);
 	Anchor->Register = Register;
+	Anchor->ShotId = ShotId;
 	Camera->AddInstanceComponent(Anchor);
 	Anchor->RegisterComponent();
 	if (UAfterlightCameraSubsystem* CameraSys = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
 		CameraSys->RegisterAnchor(Register, Camera);
+		CameraSys->RegisterShot(ShotId, Camera);
 	}
 	return Camera;
+}
+
+void AAfterlightLabDirector::BuildInspectSequence()
+{
+	InspectSequence = UAfterlightLevelSequenceFactory::CreateInspectRevealSequence(this, RevealCamera, 3.f);
 }
 
 UAfterlightDialogueAsset* AAfterlightLabDirector::BuildPlaceholderDialogue()
@@ -203,6 +218,10 @@ void AAfterlightLabDirector::BindSystems()
 		Relationship->OnRelationshipChanged.AddDynamic(this, &AAfterlightLabDirector::HandleRelationshipChanged);
 		HandleRelationshipChanged(Relationship->GetState());
 	}
+	if (UAfterlightCinematicCoordinator* Cinematic = GetWorld()->GetSubsystem<UAfterlightCinematicCoordinator>())
+	{
+		Cinematic->OnCinematicFinished.AddDynamic(this, &AAfterlightLabDirector::HandleCinematicFinished);
+	}
 }
 
 void AAfterlightLabDirector::HandleCompanionTalk(AActor* Interactor)
@@ -214,7 +233,7 @@ void AAfterlightLabDirector::HandleCompanionTalk(AActor* Interactor)
 	}
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Camera->RequestRegister(EAfterlightCameraRegister::Dialogue, 0.7f);
+		Camera->RequestShot(AfterlightShotIds::DialogueOTSCompanion, 0.85f);
 	}
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
@@ -284,7 +303,7 @@ void AAfterlightLabDirector::RestoreGameplayPresentation()
 	}
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Camera->ReleaseToExplore(0.8f);
+		Camera->ReleaseToExplore(0.9f);
 	}
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
@@ -294,33 +313,53 @@ void AAfterlightLabDirector::RestoreGameplayPresentation()
 
 void AAfterlightLabDirector::HandleDialogueFinished()
 {
-	RestoreGameplayPresentation();
-	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
+	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Narrative->SetCurrentBeatId(TEXT("Lab.Explore"));
+		Camera->RequestShot(AfterlightShotIds::DialogueCloseUpCompanion, 0.65f);
 	}
+	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
+	{
+		PC->SetInputState(EAfterlightInputState::Scripted);
+	}
+	GetWorldTimerManager().SetTimer(DialogueHoldHandle, [this]()
+	{
+		RestoreGameplayPresentation();
+		if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
+		{
+			Narrative->SetCurrentBeatId(TEXT("Lab.Explore"));
+		}
+	}, 0.7f, false);
 }
 
 void AAfterlightLabDirector::HandleInspect(AActor* Interactor)
+{
+	PlayInspectReveal();
+}
+
+void AAfterlightLabDirector::PlayInspectReveal()
 {
 	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
 		Narrative->SetCurrentBeatId(TEXT("Lab.Inspect"));
 	}
+	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+	{
+		Camera->RequestShot(AfterlightShotIds::RevealInsert, 0.6f);
+	}
 	if (UAfterlightCinematicCoordinator* Cinematic = GetWorld()->GetSubsystem<UAfterlightCinematicCoordinator>())
 	{
-		Cinematic->RequestCinematicControl();
-		GetWorldTimerManager().SetTimer(InspectCinematicHandle, [this]()
+		Cinematic->RequestCinematic(InspectSequence, EAfterlightCameraRegister::Explore, 0.85f);
+	}
+}
+
+void AAfterlightLabDirector::HandleCinematicFinished()
+{
+	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
+	{
+		if (Narrative->GetCurrentBeatId() == FName(TEXT("Lab.Inspect")))
 		{
-			if (UAfterlightCinematicCoordinator* CinematicInner = GetWorld()->GetSubsystem<UAfterlightCinematicCoordinator>())
-			{
-				CinematicInner->ReleaseCinematic();
-			}
-			if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
-			{
-				Narrative->SetCurrentBeatId(TEXT("Lab.Complete"));
-			}
-		}, 1.4f, false);
+			Narrative->SetCurrentBeatId(TEXT("Lab.Complete"));
+		}
 	}
 }
 
@@ -339,6 +378,7 @@ void AAfterlightLabDirector::HandleRelationshipChanged(FAfterlightRelationshipSt
 void AAfterlightLabDirector::ResetTechnicalFlow()
 {
 	GetWorldTimerManager().ClearTimer(InspectCinematicHandle);
+	GetWorldTimerManager().ClearTimer(DialogueHoldHandle);
 	if (UAfterlightCinematicCoordinator* Cinematic = GetWorld()->GetSubsystem<UAfterlightCinematicCoordinator>())
 	{
 		if (Cinematic->IsCinematicActive())
@@ -470,9 +510,8 @@ bool AAfterlightLabDirector::RunTechnicalSmoke(FString& OutReport)
 	PC->ChooseDialogue(0);
 	bAll &= Check(FMath::IsNearlyEqual(Relationship->GetState().Trust, 0.75f, 0.01f), TEXT("Trust 0.75 after choice A"), OutReport);
 	bAll &= Check(FMath::IsNearlyEqual(Companion->GetFollowDistance(), 140.f, 0.1f), TEXT("companion close follow after Trust high"), OutReport);
-	bAll &= Check(Camera->GetCurrentRegister() == EAfterlightCameraRegister::Explore, TEXT("camera Explore after dialogue"), OutReport);
-	bAll &= Check(PC->GetInputState() == EAfterlightInputState::Full, TEXT("input Full after dialogue"), OutReport);
-	bAll &= Check(Narrative->GetCurrentBeatId() == FName(TEXT("Lab.Explore")), TEXT("beat Lab.Explore"), OutReport);
+	bAll &= Check(Camera->GetCurrentRegister() == EAfterlightCameraRegister::Intimate, TEXT("camera Intimate after choice"), OutReport);
+	bAll &= Check(PC->GetInputState() == EAfterlightInputState::Scripted, TEXT("input Scripted during post-dialogue hold"), OutReport);
 
 	const bool bWasCine = Presentation->IsCineMode();
 	Presentation->ToggleCineMode();
@@ -485,8 +524,9 @@ bool AAfterlightLabDirector::RunTechnicalSmoke(FString& OutReport)
 	bAll &= Check(bInspected, TEXT("inspect via forward interaction probe"), OutReport);
 	bAll &= Check(Narrative->HasFlag(AfterlightTags::Story_Test_InspectedObject), TEXT("flag Story.Test.InspectedObject"), OutReport);
 	bAll &= Check(Cinematic->IsCinematicActive(), TEXT("cinematic coordinator active after inspect"), OutReport);
+	bAll &= Check(!Cinematic->GetActiveSequenceName().IsNone(), TEXT("Level Sequence name owned by coordinator"), OutReport);
 	bAll &= Check(PC->GetInputState() == EAfterlightInputState::Locked, TEXT("input Locked during cinematic"), OutReport);
-	bAll &= Check(Camera->GetCurrentRegister() == EAfterlightCameraRegister::Cinematic, TEXT("camera Cinematic after inspect"), OutReport);
+	bAll &= Check(Camera->GetCurrentRegister() == EAfterlightCameraRegister::Reveal || Camera->GetCurrentRegister() == EAfterlightCameraRegister::Cinematic, TEXT("camera Reveal/Cinematic after inspect"), OutReport);
 
 	UAfterlightSaveSubsystem* Save = GetGameInstance()->GetSubsystem<UAfterlightSaveSubsystem>();
 	bAll &= Check(Save && Save->SaveTestSlot(), TEXT("developer save slot"), OutReport);

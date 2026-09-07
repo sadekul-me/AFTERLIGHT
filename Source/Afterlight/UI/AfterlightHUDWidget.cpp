@@ -191,6 +191,11 @@ void UAfterlightHUDWidget::RefreshDebug()
 	EAfterlightInputState Input = EAfterlightInputState::Full;
 	bool bCine = false;
 	float Follow = -1.f;
+	FName RecipeId = NAME_None;
+	FName ShotId = NAME_None;
+	FName SequenceName = NAME_None;
+	FString ViewTargetName = TEXT("(none)");
+	FString Authority = TEXT("Gameplay");
 
 	if (UGameInstance* GI = World->GetGameInstance())
 	{
@@ -207,10 +212,24 @@ void UAfterlightHUDWidget::RefreshDebug()
 	if (UAfterlightCameraSubsystem* Cam = World->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
 		Camera = Cam->GetCurrentRegister();
+		RecipeId = Cam->GetActiveRecipeId();
+		ShotId = Cam->GetActiveShotId();
+		Authority = AfterlightRegisterToName(Cam->GetCurrentRegister()).ToString();
+		switch (Cam->GetAuthority())
+		{
+		case EAfterlightCameraAuthority::Sequencer: Authority = TEXT("Sequencer"); break;
+		case EAfterlightCameraAuthority::Register: Authority = TEXT("Register"); break;
+		default: Authority = TEXT("Gameplay"); break;
+		}
+		if (AActor* ViewTarget = Cam->GetCurrentViewTarget())
+		{
+			ViewTargetName = ViewTarget->GetName();
+		}
 	}
 	if (UAfterlightCinematicCoordinator* Cine = World->GetSubsystem<UAfterlightCinematicCoordinator>())
 	{
 		bCine = Cine->IsCinematicActive();
+		SequenceName = Cine->GetActiveSequenceName();
 	}
 	if (UAfterlightPlayerContextSubsystem* Context = World->GetSubsystem<UAfterlightPlayerContextSubsystem>())
 	{
@@ -225,15 +244,26 @@ void UAfterlightHUDWidget::RefreshDebug()
 		break;
 	}
 
+	const TCHAR* InputName = TEXT("Full");
+	if (Input == EAfterlightInputState::Locked) InputName = TEXT("Locked");
+	else if (Input == EAfterlightInputState::Constrained) InputName = TEXT("Constrained");
+	else if (Input == EAfterlightInputState::Scripted) InputName = TEXT("Scripted");
+
 	const FString Body = FString::Printf(
-		TEXT("AFTERLIGHT debug\nFlags: %s\nBeat: %s\nTrust: %.2f  Suspicion: %.2f\nCamera: %s\nInput: %s\nCinematic: %s\nFollowDistance: %.0f\nH cine  F8 debug  F5/F6 save/load  1/2 choices"),
+		TEXT("AFTERLIGHT debug\nFlags: %s\nBeat: %s\nTrust: %.2f  Suspicion: %.2f\nCamera: %s\nRecipe: %s\nShot: %s\nViewTarget: %s\nAuthority: %s\nSequence: %s\nInput: %s\nCinematic: %s\nCineMode: %s\nFollowDistance: %.0f\nH cine  F8 debug  F7 explore  F9 dialogue  F10 reveal  F5/F6 save/load  1/2 choices"),
 		*Flags,
 		*Beat.ToString(),
 		Rel.Trust,
 		Rel.Suspicion,
 		*AfterlightRegisterToName(Camera).ToString(),
-		Input == EAfterlightInputState::Locked ? TEXT("Locked") : Input == EAfterlightInputState::Constrained ? TEXT("Constrained") : TEXT("Full"),
+		*RecipeId.ToString(),
+		*ShotId.ToString(),
+		*ViewTargetName,
+		*Authority,
+		*SequenceName.ToString(),
+		InputName,
 		bCine ? TEXT("Active") : TEXT("Off"),
+		bCineMode ? TEXT("On") : TEXT("Off"),
 		Follow);
 	SetDebugText(FText::FromString(Body));
 }

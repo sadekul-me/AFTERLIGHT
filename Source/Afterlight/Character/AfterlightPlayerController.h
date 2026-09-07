@@ -15,7 +15,8 @@ enum class EAfterlightInputState : uint8
 {
 	Full,
 	Constrained,
-	Locked
+	Locked,
+	Scripted
 };
 
 UCLASS()
@@ -51,6 +52,9 @@ protected:
 	void HandleChoice2();
 	void HandleSaveTest();
 	void HandleLoadTest();
+	void HandleForceExplore();
+	void HandleForceDialogue();
+	void HandlePlayReveal();
 	void EnsureRuntimeInput();
 	void ApplyInputStateToPawn();
 	AAfterlightCharacter* GetAfterlightPawn() const;
@@ -84,6 +88,15 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UInputAction> LoadTestAction;
+
+	UPROPERTY()
+	TObjectPtr<UInputAction> ForceExploreAction;
+
+	UPROPERTY()
+	TObjectPtr<UInputAction> ForceDialogueAction;
+
+	UPROPERTY()
+	TObjectPtr<UInputAction> PlayRevealAction;
 
 	EAfterlightInputState InputState = EAfterlightInputState::Full;
 };

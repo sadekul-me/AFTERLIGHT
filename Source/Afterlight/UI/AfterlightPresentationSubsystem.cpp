@@ -5,6 +5,7 @@
 #include "Core/AfterlightPlayerContextSubsystem.h"
 #include "Interaction/AfterlightInteractionComponent.h"
 #include "Character/AfterlightCharacter.h"
+#include "Cinematic/AfterlightCinematicCoordinator.h"
 
 void UAfterlightPresentationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
@@ -16,7 +17,26 @@ void UAfterlightPresentationSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	EnsureWidget();
-	if (bCineMode)
+
+	bool bSequenceActive = false;
+	if (UWorld* World = GetWorld())
+	{
+		if (UAfterlightCinematicCoordinator* Cinematic = World->GetSubsystem<UAfterlightCinematicCoordinator>())
+		{
+			bSequenceActive = Cinematic->IsCinematicActive();
+		}
+	}
+
+	const bool bSuppressDev = bCineMode || bSequenceActive;
+	if (Widget)
+	{
+		Widget->SetDebugVisible(bDebugVisible && !bSuppressDev);
+		if (bSuppressDev)
+		{
+			Widget->SetPrompt(FText::GetEmpty());
+		}
+	}
+	if (bSuppressDev)
 	{
 		return;
 	}

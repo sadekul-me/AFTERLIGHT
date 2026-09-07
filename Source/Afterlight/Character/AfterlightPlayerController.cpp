@@ -11,6 +11,10 @@
 #include "Narrative/AfterlightDialogueRunner.h"
 #include "UI/AfterlightPresentationSubsystem.h"
 #include "Save/AfterlightSaveSubsystem.h"
+#include "Camera/AfterlightCameraSubsystem.h"
+#include "Cinematic/AfterlightCinematicCoordinator.h"
+#include "Cinematic/AfterlightLabDirector.h"
+#include "EngineUtils.h"
 #include "Engine/GameInstance.h"
 
 AAfterlightPlayerController::AAfterlightPlayerController()
@@ -60,6 +64,9 @@ void AAfterlightPlayerController::EnsureRuntimeInput()
 	Choice2Action = NewObject<UInputAction>(this, TEXT("IA_Choice2"));
 	SaveTestAction = NewObject<UInputAction>(this, TEXT("IA_SaveTest"));
 	LoadTestAction = NewObject<UInputAction>(this, TEXT("IA_LoadTest"));
+	ForceExploreAction = NewObject<UInputAction>(this, TEXT("IA_ForceExplore"));
+	ForceDialogueAction = NewObject<UInputAction>(this, TEXT("IA_ForceDialogue"));
+	PlayRevealAction = NewObject<UInputAction>(this, TEXT("IA_PlayReveal"));
 
 	auto AddSwizzleY = [this](FEnhancedActionKeyMapping& Mapping)
 	{
@@ -95,6 +102,9 @@ void AAfterlightPlayerController::EnsureRuntimeInput()
 	MappingContext->MapKey(Choice2Action, EKeys::Two);
 	MappingContext->MapKey(SaveTestAction, EKeys::F5);
 	MappingContext->MapKey(LoadTestAction, EKeys::F6);
+	MappingContext->MapKey(ForceExploreAction, EKeys::F7);
+	MappingContext->MapKey(ForceDialogueAction, EKeys::F9);
+	MappingContext->MapKey(PlayRevealAction, EKeys::F10);
 }
 
 void AAfterlightPlayerController::SetupInputComponent()
@@ -121,6 +131,9 @@ void AAfterlightPlayerController::SetupInputComponent()
 	EIC->BindAction(Choice2Action, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleChoice2);
 	EIC->BindAction(SaveTestAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleSaveTest);
 	EIC->BindAction(LoadTestAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleLoadTest);
+	EIC->BindAction(ForceExploreAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleForceExplore);
+	EIC->BindAction(ForceDialogueAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandleForceDialogue);
+	EIC->BindAction(PlayRevealAction, ETriggerEvent::Started, this, &AAfterlightPlayerController::HandlePlayReveal);
 }
 
 AAfterlightCharacter* AAfterlightPlayerController::GetAfterlightPawn() const
@@ -134,6 +147,7 @@ FGameplayTag AAfterlightPlayerController::GetInputStateTag() const
 	{
 	case EAfterlightInputState::Constrained: return AfterlightTags::Input_Constrained;
 	case EAfterlightInputState::Locked: return AfterlightTags::Input_Locked;
+	case EAfterlightInputState::Scripted: return AfterlightTags::Input_Scripted;
 	default: return AfterlightTags::Input_Full;
 	}
 }
@@ -160,9 +174,9 @@ void AAfterlightPlayerController::ApplyInputStateToPawn()
 	if (AAfterlightCharacter* AfterlightPawn = GetAfterlightPawn())
 	{
 		const bool bFull = InputState == EAfterlightInputState::Full;
-		const bool bLocked = InputState == EAfterlightInputState::Locked;
+		const bool bCanLook = InputState == EAfterlightInputState::Full || InputState == EAfterlightInputState::Constrained;
 		AfterlightPawn->SetMoveEnabled(bFull);
-		AfterlightPawn->SetLookEnabled(!bLocked);
+		AfterlightPawn->SetLookEnabled(bCanLook);
 	}
 }
 
@@ -180,7 +194,7 @@ void AAfterlightPlayerController::HandleMove(const FInputActionValue& Value)
 
 void AAfterlightPlayerController::HandleLook(const FInputActionValue& Value)
 {
-	if (InputState == EAfterlightInputState::Locked)
+	if (InputState == EAfterlightInputState::Locked || InputState == EAfterlightInputState::Scripted)
 	{
 		return;
 	}
@@ -261,5 +275,32 @@ void AAfterlightPlayerController::HandleLoadTest()
 		{
 			Save->LoadTestSlot();
 		}
+	}
+}
+
+void AAfterlightPlayerController::HandleForceExplore()
+{
+	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+	{
+		Camera->ReleaseToExplore(0.6f);
+	}
+	SetInputState(EAfterlightInputState::Full);
+}
+
+void AAfterlightPlayerController::HandleForceDialogue()
+{
+	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+	{
+		Camera->RequestShot(AfterlightShotIds::DialogueOTSCompanion, 0.5f);
+	}
+	SetInputState(EAfterlightInputState::Constrained);
+}
+
+void AAfterlightPlayerController::HandlePlayReveal()
+{
+	for (TActorIterator<AAfterlightLabDirector> It(GetWorld()); It; ++It)
+	{
+		It->PlayInspectReveal();
+		return;
 	}
 }

@@ -11,6 +11,7 @@ class AAfterlightCompanionCharacter;
 class AAfterlightInspectableActor;
 class ACineCameraActor;
 class UAfterlightDialogueAsset;
+class ULevelSequence;
 
 UCLASS()
 class AFTERLIGHT_API AAfterlightLabDirector : public AActor
@@ -25,6 +26,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Afterlight|Debug")
 	void ResetTechnicalFlow();
 
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|Debug")
+	void PlayInspectReveal();
+
 	/** Drives talk → choice → inspect → save/load without requiring a human to click. */
 	bool RunTechnicalSmoke(FString& OutReport);
 
@@ -32,7 +36,8 @@ protected:
 	void BuildGreybox();
 	void BindSystems();
 	UAfterlightDialogueAsset* BuildPlaceholderDialogue();
-	ACineCameraActor* SpawnCineCamera(const FVector& Location, const FRotator& Rotation, EAfterlightCameraRegister Register);
+	ACineCameraActor* SpawnShot(FName ShotId, const FVector& Location, const FVector& LookAt, EAfterlightCameraRegister Register);
+	void BuildInspectSequence();
 
 	UFUNCTION()
 	void HandleCompanionTalk(AActor* Interactor);
@@ -55,6 +60,9 @@ protected:
 	UFUNCTION()
 	void HandleRelationshipChanged(FAfterlightRelationshipState State);
 
+	UFUNCTION()
+	void HandleCinematicFinished();
+
 	void RestoreGameplayPresentation();
 	void MaybeScheduleCommandLineSmoke();
 	bool Check(bool bCondition, const TCHAR* Label, FString& OutReport);
@@ -68,7 +76,15 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UAfterlightDialogueAsset> PlaceholderDialogue;
 
+	UPROPERTY()
+	TObjectPtr<ACineCameraActor> RevealCamera;
+
+	UPROPERTY()
+	TObjectPtr<ULevelSequence> InspectSequence;
+
 	FTimerHandle InspectCinematicHandle;
+	FTimerHandle DialogueHoldHandle;
 
 	bool bBuilt = false;
 };
+
