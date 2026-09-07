@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Cinematic/AfterlightCinematicSession.h"
 #include "AfterlightCinematicCoordinator.generated.h"
 
 class ULevelSequence;
@@ -18,7 +19,7 @@ class AFTERLIGHT_API UAfterlightCinematicCoordinator : public UWorldSubsystem
 
 public:
 	UFUNCTION(BlueprintCallable, Category = "Afterlight|Cinematic")
-	void RequestCinematic(ULevelSequence* Sequence);
+	void RequestCinematic(ULevelSequence* Sequence, EAfterlightCameraRegister ReturnRegister = EAfterlightCameraRegister::Explore, float BlendOutTime = 0.8f);
 
 	UFUNCTION(BlueprintCallable, Category = "Afterlight|Cinematic")
 	void RequestCinematicControl();
@@ -26,8 +27,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Afterlight|Cinematic")
 	void ReleaseCinematic();
 
+	UFUNCTION(BlueprintCallable, Category = "Afterlight|Cinematic")
+	void CancelCinematic();
+
 	UFUNCTION(BlueprintPure, Category = "Afterlight|Cinematic")
-	bool IsCinematicActive() const { return bActive; }
+	bool IsCinematicActive() const { return Session.bActive; }
+
+	UFUNCTION(BlueprintPure, Category = "Afterlight|Cinematic")
+	FName GetActiveSequenceName() const { return Session.SequenceName; }
+
+	UFUNCTION(BlueprintPure, Category = "Afterlight|Cinematic")
+	EAfterlightCameraRegister GetReturnRegister() const { return Session.ReturnRegister; }
+
+	const FAfterlightCinematicSession& GetSession() const { return Session; }
 
 	UPROPERTY(BlueprintAssignable)
 	FAfterlightCinematicFinished OnCinematicFinished;
@@ -36,8 +48,11 @@ private:
 	UFUNCTION()
 	void HandleSequenceFinished();
 	AAfterlightPlayerController* ResolveController() const;
+	void StopPlayer();
 
-	bool bActive = false;
+	FAfterlightCinematicSession Session;
+	float BlendOut = 0.8f;
+	FTimerHandle SafetyHandle;
 
 	UPROPERTY()
 	TObjectPtr<ULevelSequencePlayer> Player;

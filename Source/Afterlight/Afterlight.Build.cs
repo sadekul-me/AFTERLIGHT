@@ -21,7 +21,8 @@ public class Afterlight : ModuleRules
 			"SlateCore",
 			"CinematicCamera",
 			"LevelSequence",
-			"MovieScene"
+			"MovieScene",
+			"MovieSceneTracks"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
