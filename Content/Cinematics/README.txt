@@ -1,0 +1,1 @@
+Authored Level Sequences and cine cameras. The lab currently uses runtime Cine Camera Actors and a timed cinematic register hold.

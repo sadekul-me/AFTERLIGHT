@@ -1,0 +1,1 @@
+Dialogue and beat data assets. Placeholder lab dialogue is constructed in C++ by AfterlightLabDirector.
