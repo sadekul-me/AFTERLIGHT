@@ -1,5 +1,7 @@
 # Vertical Slice Production Pass 1 — Greybox Implementation
 
+Later visual/performance work: `docs/implementation/autonomous-sprint-01.md`.
+
 This is an implementation record. Story canon remains:
 
 - `docs/narrative/vertical-slice-story-bible.md`

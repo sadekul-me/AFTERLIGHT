@@ -168,6 +168,16 @@ protected:
 	FTimerHandle EntryHandle;
 	FTimerHandle EndCardHandle;
 	FTimerHandle QaHandle;
+	FTimerHandle QaHandleB;
+	bool bQaContactCaptured = false;
+	bool bQaMayaCuCaptured = false;
+	bool bQaChoiceCaptured = false;
+	bool bQaLanternCaptured = false;
+	bool bQaDroneCaptured = false;
+	bool bQaWarningCaptured = false;
+	bool bQaEndingCaptured = false;
+	float FpsWindowSeconds = 0.f;
+	int32 FpsWindowFrames = 0;
 
 	TArray<FText> WarningLines;
 	int32 WarningLineIndex = 0;

@@ -16,7 +16,7 @@ AAfterlightCompanionCharacter::AAfterlightCompanionCharacter()
 	GetCapsuleComponent()->InitCapsuleSize(40.f, 88.f);
 	GetCharacterMovement()->MaxWalkSpeed = 160.f;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->RotationRate = FRotator(0.f, 280.f, 0.f);
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 380.f, 0.f);
 	bUseControllerRotationYaw = false;
 
 	Interactable = CreateDefaultSubobject<UAfterlightInteractableComponent>(TEXT("Interactable"));
@@ -92,7 +92,7 @@ void AAfterlightCompanionCharacter::SetPreferPlayerLook(bool bPreferPlayer)
 void AAfterlightCompanionCharacter::GlanceAt(const FVector& WorldLocation)
 {
 	GlanceLocation = WorldLocation;
-	GlanceHold = 1.6f;
+	GlanceHold = 2.2f;
 }
 
 bool AAfterlightCompanionCharacter::HasReachedPathEnd() const

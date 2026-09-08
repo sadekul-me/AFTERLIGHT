@@ -40,6 +40,62 @@ public static class AfterlightWin32 {
 	}
 }
 
+function Pin-AfterlightPlayWindow([int]$ProcessId) {
+	Add-Type -TypeDefinition @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class AfterlightPin {
+	public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+	[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
+	[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+	[DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int ht, bool repaint);
+	[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+	[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+	[DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+	[DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+	[DllImport("user32.dll")] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+	[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+	[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+	[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+	public struct RECT { public int L, T, R, B; }
+}
+"@ -ErrorAction SilentlyContinue
+	try { [AfterlightPin]::SetProcessDPIAware() | Out-Null } catch {}
+	Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+	$work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+	$targetX = $work.X + 80
+	$targetY = $work.Y + 72
+	$editor = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+	if ($editor -and $editor.MainWindowHandle -ne [IntPtr]::Zero) {
+		[AfterlightPin]::ShowWindow($editor.MainWindowHandle, 9) | Out-Null
+	}
+	$script:pinPid = [uint32]$ProcessId
+	$script:preview = [IntPtr]::Zero
+	$cb = [AfterlightPin+EnumProc] {
+		param($h, $l)
+		[uint32]$procId = 0
+		[AfterlightPin]::GetWindowThreadProcessId($h, [ref]$procId) | Out-Null
+		if ($procId -ne $script:pinPid) { return $true }
+		$sbC = New-Object System.Text.StringBuilder 64
+		$sbT = New-Object System.Text.StringBuilder 256
+		[AfterlightPin]::GetClassName($h, $sbC, 64) | Out-Null
+		[AfterlightPin]::GetWindowText($h, $sbT, 256) | Out-Null
+		if ($sbC.ToString() -ne "UnrealWindow") { return $true }
+		$title = $sbT.ToString()
+		if ($title -match "Unreal Editor" -and $title -notmatch "Preview") { return $true }
+		$script:preview = $h
+		return $true
+	}
+	[AfterlightPin]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+	if ($script:preview -eq [IntPtr]::Zero) { return }
+	[AfterlightPin]::ShowWindow($script:preview, 9) | Out-Null
+	[AfterlightPin]::ShowWindow($script:preview, 5) | Out-Null
+	[AfterlightPin]::MoveWindow($script:preview, $targetX, $targetY, 854, 510, $true) | Out-Null
+	[AfterlightPin]::SetForegroundWindow($script:preview) | Out-Null
+	Write-Host ("Play window pinned to primary display at {0},{1} (854x480)." -f $targetX, $targetY)
+}
+
 function Show-LogTail {
 	if (Test-Path $LogFile) {
 		Write-Host ""
@@ -96,6 +152,45 @@ if (-not (Test-Path $ProjectFile)) {
 if (-not (Test-Path $Editor)) {
 	Write-Error "Unreal Editor 5.8.2 was not found at $Editor"
 	exit 1
+}
+
+$EditorCmd = Join-Path $EngineRoot "Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
+$BuildBat = Join-Path $EngineRoot "Engine\Build\BatchFiles\Build.bat"
+$LabMap = "/Game/Environments/Slice01/L_Dev_CinematicLab"
+
+function Invoke-AfterlightBuild {
+	Write-Host "Building AFTERLIGHTEditor Win64 Development..."
+	& $BuildBat AFTERLIGHTEditor Win64 Development "-Project=$ProjectFile" -NoPCH -MaxParallelActions=1
+	if ($LASTEXITCODE -ne 0) {
+		throw "AFTERLIGHT build failed (exit $LASTEXITCODE)."
+	}
+	Write-Host "BUILD OK"
+}
+
+function Invoke-AfterlightAutomation {
+	$log = Join-Path $ProjectRoot "Saved\Logs\AfterlightAutomation.log"
+	Write-Host "Running Afterlight automation..."
+	& $EditorCmd $ProjectFile -unattended -nop4 -nosplash -NullRHI -nosound -log -abslog="$log" -ExecCmds="Automation RunTests Afterlight; Quit" -TestExit="Automation Test Queue Empty" -ReportOutputPath=(Join-Path $ProjectRoot "Saved\Automation") | Out-Null
+	if ($LASTEXITCODE -ne 0) {
+		throw "AFTERLIGHT automation failed (exit $LASTEXITCODE)."
+	}
+	Write-Host "TEST OK"
+}
+
+function Invoke-AfterlightSmoke {
+	$sliceLog = Join-Path $ProjectRoot "Saved\Logs\AfterlightSliceSmoke.log"
+	$labLog = Join-Path $ProjectRoot "Saved\Logs\AfterlightSmoke.log"
+	Write-Host "Running Slice01 smoke..."
+	& $EditorCmd $ProjectFile $Map -game -unattended -nop4 -nosplash -NullRHI -nosound -log -abslog="$sliceLog" -AfterlightSliceSmoke -ExecCmds="DisableAllScreenMessages"
+	if ($LASTEXITCODE -ne 0) {
+		throw "Slice01 smoke failed (exit $LASTEXITCODE)."
+	}
+	Write-Host "Running Lab smoke..."
+	& $EditorCmd $ProjectFile $LabMap -game -unattended -nop4 -nosplash -NullRHI -nosound -log -abslog="$labLog" -AfterlightSmoke -ExecCmds="DisableAllScreenMessages"
+	if ($LASTEXITCODE -ne 0) {
+		throw "Lab smoke failed (exit $LASTEXITCODE)."
+	}
+	Write-Host "SMOKE OK"
 }
 
 switch ($Command) {
@@ -168,7 +263,7 @@ switch ($Command) {
 				"-NoSourceControl",
 				"-nosplash",
 				"-dx11",
-				"-dpcvars=r.Streaming.PoolSize=96,r.ScreenPercentage=67,sg.ViewDistanceQuality=0,sg.AntiAliasingQuality=0,sg.ShadowQuality=0,sg.GlobalIlluminationQuality=0,sg.ReflectionQuality=0,sg.PostProcessQuality=0,sg.TextureQuality=0,sg.EffectsQuality=0,sg.FoliageQuality=0,sg.ShadingQuality=0,r.Lumen.DiffuseIndirect.Allow=0,r.Shadow.Virtual.Enable=0,r.Nanite=0,r.GenerateMeshDistanceFields=0,r.DefaultFeature.MotionBlur=0,Afterlight.QaAuto=1,Afterlight.QaDrive=1",
+				"-dpcvars=r.Streaming.PoolSize=64,r.ScreenPercentage=50,sg.ViewDistanceQuality=0,sg.AntiAliasingQuality=0,sg.ShadowQuality=0,sg.GlobalIlluminationQuality=0,sg.ReflectionQuality=0,sg.PostProcessQuality=0,sg.TextureQuality=0,sg.EffectsQuality=0,sg.FoliageQuality=0,sg.ShadingQuality=0,r.Lumen.DiffuseIndirect.Allow=0,r.Shadow.Virtual.Enable=0,r.Nanite=0,r.GenerateMeshDistanceFields=0,r.DefaultFeature.MotionBlur=0,r.DefaultFeature.Bloom=0,r.BloomQuality=0,r.AmbientOcclusionLevels=0,r.LightFunctionQuality=0,Afterlight.Camera.AllowDOF=0,Afterlight.QaAuto=1,Afterlight.QaDrive=1",
 				"-AfterlightAutoPlay",
 				"-ExecCmds=DisableAllScreenMessages"
 			) -WorkingDirectory $ProjectRoot -PassThru
@@ -249,7 +344,12 @@ switch ($Command) {
 			}
 		}
 		if ($pieStarted) {
-			Write-Host "OK: Play-in-editor was requested. Keep the editor visible; use the AFTERLIGHT Preview window."
+			Start-Sleep -Seconds 2
+			1..8 | ForEach-Object {
+				Pin-AfterlightPlayWindow -ProcessId $still.ProcessId
+				Start-Sleep -Milliseconds 400
+			}
+			Write-Host "OK: Play-in-editor was requested. Preview is pinned to the primary monitor."
 			Write-Host "Click / Space / Enter on the card. Do not minimize the editor."
 		} else {
 			Write-Host "WARN: Auto-PIE was not confirmed in the log. Focus AFTERLIGHT and press Alt+P."
@@ -257,10 +357,36 @@ switch ($Command) {
 		}
 		exit 0
 	}
+	"build" {
+		Invoke-AfterlightBuild
+		exit 0
+	}
+	"test" {
+		Invoke-AfterlightAutomation
+		exit 0
+	}
+	"smoke" {
+		Invoke-AfterlightSmoke
+		exit 0
+	}
+	"verify" {
+		Invoke-AfterlightBuild
+		Invoke-AfterlightAutomation
+		Invoke-AfterlightSmoke
+		Write-Host "VERIFY OK"
+		exit 0
+	}
+	"all" {
+		Invoke-AfterlightBuild
+		Invoke-AfterlightAutomation
+		Invoke-AfterlightSmoke
+		Write-Host "VERIFY OK. Opening owner play..."
+		& $PSCommandPath play
+		exit $LASTEXITCODE
+	}
 	default {
-		Write-Host "FAIL: Reserved command '$Command'."
-		Write-Host "This launcher currently supports:  .\afterlight.ps1 play"
-		Write-Host "Later verbs: build, test, smoke, verify, all"
+		Write-Host "FAIL: Unknown command '$Command'."
+		Write-Host "Supported: play, build, test, smoke, verify, all"
 		exit 1
 	}
 }

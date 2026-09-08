@@ -32,7 +32,7 @@ namespace
 			switch (Bed)
 			{
 			case EAfterlightTempBed::Rain:
-				S = SampleNoise(0.22f);
+				S = SampleNoise((i & 3) == 0 ? 0.18f : 0.04f);
 				break;
 			case EAfterlightTempBed::Electric:
 				PhaseA += 2.f * PI * 92.f / Rate;

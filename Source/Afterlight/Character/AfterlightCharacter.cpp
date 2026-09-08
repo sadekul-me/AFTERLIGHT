@@ -35,9 +35,7 @@ AAfterlightCharacter::AAfterlightCharacter()
 	CameraBoom->TargetArmLength = 340.f;
 	CameraBoom->bUsePawnControlRotation = true;
 	CameraBoom->SocketOffset = FVector(0.f, 48.f, 64.f);
-	CameraBoom->bDoCollisionTest = true;
-	CameraBoom->ProbeSize = 28.f;
-	CameraBoom->ProbeChannel = ECC_Camera;
+	CameraBoom->bDoCollisionTest = false;
 	CameraBoom->bEnableCameraLag = true;
 	CameraBoom->CameraLagSpeed = 5.5f;
 	CameraBoom->bEnableCameraRotationLag = true;

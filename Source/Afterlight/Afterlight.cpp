@@ -7,7 +7,6 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "HAL/IConsoleManager.h"
-#include "HAL/PlatformMemory.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 #include "UnrealClient.h"
@@ -211,12 +210,6 @@ bool AfterlightQaDriveEnabled()
 
 void AfterlightCaptureQaShot(const TCHAR* Name)
 {
-	const FPlatformMemoryStats Mem = FPlatformMemory::GetStats();
-	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_MEM usedPhys=%.2fGB availPhys=%.2fGB usedVirt=%.2fGB availVirt=%.2fGB"),
-		Mem.UsedPhysical / (1024.0 * 1024.0 * 1024.0),
-		Mem.AvailablePhysical / (1024.0 * 1024.0 * 1024.0),
-		Mem.UsedVirtual / (1024.0 * 1024.0 * 1024.0),
-		Mem.AvailableVirtual / (1024.0 * 1024.0 * 1024.0));
 	const FString ShotName = Name && *Name ? FString(Name) : FDateTime::Now().ToString(TEXT("HHmmss"));
 	const FString Dir = FPaths::ProjectSavedDir() / TEXT("QA");
 	IFileManager::Get().MakeDirectory(*Dir, true);

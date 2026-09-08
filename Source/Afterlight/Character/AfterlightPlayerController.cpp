@@ -281,7 +281,7 @@ void AAfterlightPlayerController::HandleMove(const FInputActionValue& Value)
 			if (Now - LastMoveLog > 1.5f)
 			{
 				LastMoveLog = Now;
-				UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_MOVE X=%.0f"), AfterlightPawn->GetActorLocation().X);
+				UE_LOG(LogAfterlight, Verbose, TEXT("AFTERLIGHT_MOVE X=%.0f"), AfterlightPawn->GetActorLocation().X);
 			}
 		}
 	}

@@ -11,9 +11,8 @@ This is for playing the current vertical slice. You do not need Unreal knowledge
 .\afterlight.ps1 play
 ```
 
-3. When the Unreal Editor window is ready, click it once.
-4. Press **Alt+P**. Play starts in a **New Editor Window** titled `AFTERLIGHT Preview` (960x540, not the Outliner viewport). The main editor may minimize.
-5. Click inside that Preview window. On the black **AFTERLIGHT** card, **Left Click**, or press **Space** / **Enter**. Do not use the editor Outliner.
+3. Wait until the log says Slice01 is loaded. Play should start itself in a **New Editor Window** on the primary monitor (`AFTERLIGHT Preview`, 854x480). If it does not, click the editor and press **Alt+P**.
+4. Click inside that Preview window. On the black **AFTERLIGHT** card, **Left Click**, or press **Space** / **Enter**. Do not use the editor Outliner. Do not minimize the editor.
 
 The map is `/Game/Environments/Slice01/L_Slice01_Greybox`. You should not need to pick a map.
 
@@ -56,4 +55,6 @@ Runtime is about **7–9 minutes** if you walk with Maya. Faster if you never li
 
 ## Greybox limits
 
-Capsules instead of people. Boxes instead of rooms. Placeholder rain/hum, no human voices. Subtitles stand in for speech. This is still a cinematic demo, not the finished film.
+Manny/Quinn placeholders instead of final faces. Boxes instead of rooms. Placeholder rain/hum, no human voices. Subtitles stand in for speech. This is still a cinematic demo, not the finished film.
+
+Other commands: `.\afterlight.ps1 build` · `test` · `smoke` · `verify` · `all`.

@@ -137,12 +137,54 @@ namespace
 		Mesh->SetCastShadow(true);
 		Mesh->SetCastContactShadow(false);
 		Mesh->SetDisablePostProcessBlueprint(true);
-		Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		Mesh->bEnableUpdateRateOptimizations = true;
 		Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 		Mesh->ComponentTags.Add(TagMannequin);
 		if (!bCompanion)
 		{
 			Mesh->ComponentTags.Add(TagRecover);
+		}
+
+		const FLinearColor Tint = bCompanion
+			? FLinearColor(1.08f, 0.62f, 0.28f, 1.f)
+			: FLinearColor(0.38f, 0.48f, 0.58f, 1.f);
+		for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); ++Slot)
+		{
+			if (UMaterialInstanceDynamic* Mid = Mesh->CreateAndSetMaterialInstanceDynamic(Slot))
+			{
+				Mid->SetVectorParameterValue(TEXT("Tint"), Tint);
+				Mid->SetVectorParameterValue(TEXT("Paint"), Tint);
+			}
+		}
+
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		UMaterialInterface* BaseMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+		if (Cube && BaseMat)
+		{
+			UMaterialInstanceDynamic* Gear = MakeColor(Character, BaseMat, bCompanion
+				? FLinearColor(0.92f, 0.42f, 0.12f)
+				: FLinearColor(0.05f, 0.07f, 0.1f));
+			UStaticMeshComponent* Plate = NewObject<UStaticMeshComponent>(Character, TEXT("IdentityPlate"));
+			Plate->SetupAttachment(Mesh, FName(TEXT("spine_01")));
+			if (!Mesh->DoesSocketExist(FName(TEXT("spine_01"))))
+			{
+				Plate->SetupAttachment(Mesh);
+				Plate->SetRelativeLocation(FVector(8.f, 0.f, 70.f));
+			}
+			else
+			{
+				Plate->SetRelativeLocation(bCompanion ? FVector(8.f, 0.f, 6.f) : FVector(6.f, 0.f, 4.f));
+			}
+			Plate->SetStaticMesh(Cube);
+			Plate->SetRelativeScale3D(bCompanion ? FVector(0.18f, 0.28f, 0.08f) : FVector(0.22f, 0.32f, 0.28f));
+			Plate->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Plate->SetCastShadow(false);
+			if (Gear)
+			{
+				Plate->SetMaterial(0, Gear);
+			}
+			Plate->RegisterComponent();
 		}
 
 		if (UAnimationAsset* Idle = IdleAnim())
@@ -227,7 +269,7 @@ namespace
 				Mesh->ComponentTags.Remove(TagPlayingWalk);
 			}
 		}
-		Mesh->SetPlayRate(bWalk ? FMath::Clamp(Speed / 165.f, 0.85f, 1.25f) : 1.f);
+		Mesh->SetPlayRate(bWalk ? FMath::Clamp(Speed / 190.f, 0.8f, 1.15f) : 1.f);
 	}
 
 	void TickRecover(ACharacter* Character, float DeltaSeconds)
@@ -282,15 +324,18 @@ void FAfterlightPlaceholderVisuals::Attach(ACharacter* Character, bool bCompanio
 		AttachPrimitiveHumanoid(Character, bCompanion);
 	}
 
-	UPointLightComponent* Rim = NewObject<UPointLightComponent>(Character, TEXT("PlaceholderRim"));
-	Rim->SetupAttachment(Character->GetCapsuleComponent());
-	Rim->SetRelativeLocation(FVector(16.f, 0.f, 42.f));
-	Rim->SetIntensity(bCompanion ? 7.5f : 2.2f);
-	Rim->SetAttenuationRadius(bCompanion ? 320.f : 150.f);
-	Rim->SetLightColor(bCompanion ? FLinearColor(1.f, 0.68f, 0.36f) : FLinearColor(0.45f, 0.6f, 0.82f));
-	Rim->SetCastShadows(false);
-	Rim->SetMobility(EComponentMobility::Movable);
-	Rim->RegisterComponent();
+	if (bCompanion)
+	{
+		UPointLightComponent* Rim = NewObject<UPointLightComponent>(Character, TEXT("PlaceholderRim"));
+		Rim->SetupAttachment(Character->GetCapsuleComponent());
+		Rim->SetRelativeLocation(FVector(14.f, 0.f, 44.f));
+		Rim->SetIntensity(8.5f);
+		Rim->SetAttenuationRadius(280.f);
+		Rim->SetLightColor(FLinearColor(1.f, 0.62f, 0.28f));
+		Rim->SetCastShadows(false);
+		Rim->SetMobility(EComponentMobility::Movable);
+		Rim->RegisterComponent();
+	}
 }
 
 void FAfterlightPlaceholderVisuals::Tick(ACharacter* Character, float DeltaSeconds)

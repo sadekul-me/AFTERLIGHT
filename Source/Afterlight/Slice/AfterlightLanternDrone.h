@@ -37,6 +37,9 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UTextRenderComponent> Label;
 
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> ScanBeam;
+
 	FVector SweepStart = FVector::ZeroVector;
 	FVector SweepEnd = FVector::ZeroVector;
 	float SweepDuration = 8.f;

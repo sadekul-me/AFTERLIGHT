@@ -42,16 +42,15 @@ UAfterlightCameraRecipe* UAfterlightCameraRecipe::CreateDefault(UObject* Outer, 
 	switch (Register)
 	{
 	case EAfterlightCameraRegister::Dialogue:
-		Recipe->FocalLength = 50.f;
-		Recipe->Aperture = 2.8f;
+		Recipe->FocalLength = 32.f;
+		Recipe->Aperture = 4.5f;
 		Recipe->BlendTime = 0.85f;
 		Recipe->FocusMode = EAfterlightCameraFocusMode::Target;
 		Recipe->bEnableDOF = false;
-		Recipe->Aperture = 4.5f;
 		Recipe->ShoulderSide = 1.f;
 		break;
 	case EAfterlightCameraRegister::Intimate:
-		Recipe->FocalLength = 50.f;
+		Recipe->FocalLength = 35.f;
 		Recipe->Aperture = 4.0f;
 		Recipe->BlendTime = 0.7f;
 		Recipe->FocusMode = EAfterlightCameraFocusMode::Target;
@@ -69,18 +68,20 @@ UAfterlightCameraRecipe* UAfterlightCameraRecipe::CreateDefault(UObject* Outer, 
 		Recipe->PushInTime = 2.4f;
 		break;
 	case EAfterlightCameraRegister::Threat:
-		Recipe->FocalLength = 40.f;
-		Recipe->Aperture = 2.8f;
+		Recipe->FocalLength = 24.f;
+		Recipe->Aperture = 4.0f;
 		Recipe->BlendTime = 0.45f;
-		Recipe->GameplayFOV = 54.f;
+		Recipe->GameplayFOV = 68.f;
 		Recipe->MovementLag = 7.f;
+		Recipe->bEnableDOF = false;
 		break;
 	case EAfterlightCameraRegister::Cinematic:
-		Recipe->FocalLength = 35.f;
-		Recipe->Aperture = 2.8f;
+		Recipe->FocalLength = 24.f;
+		Recipe->Aperture = 4.0f;
 		Recipe->BlendTime = 0.5f;
 		Recipe->FocusMode = EAfterlightCameraFocusMode::Manual;
-		Recipe->bEnableDOF = true;
+		Recipe->ManualFocusDistance = 900.f;
+		Recipe->bEnableDOF = false;
 		break;
 	default:
 		Recipe->FocalLength = 40.f;
