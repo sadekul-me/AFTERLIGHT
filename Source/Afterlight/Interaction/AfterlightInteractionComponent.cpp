@@ -49,7 +49,7 @@ void UAfterlightInteractionComponent::ConsiderActor(AActor* Actor, AActor* Owner
 
 	const FVector Dir = ToTarget.GetSafeNormal();
 	const float Facing = FVector::DotProduct(Forward, Dir);
-	if (Facing < 0.2f)
+	if (Facing < 0.15f && DistSq > FMath::Square(MaxDist * 0.9f))
 	{
 		return;
 	}
@@ -76,6 +76,7 @@ void UAfterlightInteractionComponent::RefreshTarget()
 	const FVector Forward = Owner->GetActorForwardVector();
 	const FVector Start = Owner->GetActorLocation() + FVector(0.f, 0.f, 40.f);
 	const FVector Probe = Start + Forward * (TraceDistance * 0.5f);
+	const float NearbyRadius = TraceDistance + Radius;
 
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(AfterlightInteract), false, Owner);
 	FCollisionObjectQueryParams Objects;
@@ -84,6 +85,13 @@ void UAfterlightInteractionComponent::RefreshTarget()
 	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
 
 	TArray<FOverlapResult> Overlaps;
+	World->OverlapMultiByObjectType(
+		Overlaps,
+		Start,
+		FQuat::Identity,
+		Objects,
+		FCollisionShape::MakeSphere(NearbyRadius),
+		Params);
 	World->OverlapMultiByObjectType(
 		Overlaps,
 		Probe,

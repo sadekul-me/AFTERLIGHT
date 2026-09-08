@@ -11,8 +11,10 @@
 #include "EngineUtils.h"
 #include "TimerManager.h"
 #include "CollisionQueryParams.h"
+#include "CollisionShape.h"
 #include "HAL/IConsoleManager.h"
 #include "Core/AfterlightLog.h"
+#include "Camera/AfterlightSliceProgress.h"
 
 static TAutoConsoleVariable<int32> CVarAfterlightAllowDOF(
 	TEXT("Afterlight.Camera.AllowDOF"),
@@ -198,13 +200,86 @@ bool UAfterlightCameraSubsystem::IsShotBlocked(AActor* CameraActor, const FVecto
 	}
 	FHitResult Hit;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(AfterlightShotValidity), false, CameraActor);
+	if (AActor* Focus = ResolveFocusActor())
+	{
+		Params.AddIgnoredActor(Focus);
+	}
+	if (AActor* Player = ResolveExploreViewTarget())
+	{
+		Params.AddIgnoredActor(Player);
+	}
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(
 		Hit,
 		CameraActor->GetActorLocation(),
 		FocusLocation,
-		ECC_Visibility,
+		ECC_WorldStatic,
 		Params);
 	return bHit && Hit.GetActor() && Hit.GetActor() != CameraActor;
+}
+
+bool UAfterlightCameraSubsystem::IsShotUsable(AActor* CameraActor, const FVector& FocusLocation) const
+{
+	if (!CameraActor)
+	{
+		return false;
+	}
+	const FVector Loc = CameraActor->GetActorLocation();
+	if (!FAfterlightSliceProgress::IsShotValidPlacement(Loc, FocusLocation))
+	{
+		return false;
+	}
+	FCollisionQueryParams OverlapParams(SCENE_QUERY_STAT(AfterlightShotClearance), false, CameraActor);
+	if (AActor* Focus = ResolveFocusActor())
+	{
+		OverlapParams.AddIgnoredActor(Focus);
+	}
+	if (AActor* Player = ResolveExploreViewTarget())
+	{
+		OverlapParams.AddIgnoredActor(Player);
+	}
+	if (GetWorld()->OverlapBlockingTestByChannel(Loc, FQuat::Identity, ECC_WorldStatic, FCollisionShape::MakeSphere(18.f), OverlapParams))
+	{
+		return false;
+	}
+	return !IsShotBlocked(CameraActor, FocusLocation);
+}
+
+AActor* UAfterlightCameraSubsystem::ResolveValidatedShot(FName ShotId, AActor* Focus) const
+{
+	auto Resolve = [this](FName Id) -> AActor*
+	{
+		if (const TWeakObjectPtr<AActor>* Found = Shots.Find(Id))
+		{
+			return Found->Get();
+		}
+		return nullptr;
+	};
+
+	FVector FocusLocation = Focus ? Focus->GetActorLocation() + FVector(0.f, 0.f, 72.f) : FVector::ZeroVector;
+	if (Focus)
+	{
+		if (UAfterlightFramingTargetsComponent* Framing = Focus->FindComponentByClass<UAfterlightFramingTargetsComponent>())
+		{
+			FocusLocation = Framing->GetHeadLocation();
+		}
+	}
+
+	const FName Order[] = {
+		ShotId,
+		AfterlightShotIds::DialogueTwoShot,
+		AfterlightShotIds::DialogueOTSCompanion
+	};
+	for (FName Id : Order)
+	{
+		if (AActor* Candidate = Resolve(Id))
+		{
+			if (IsShotUsable(Candidate, FocusLocation))
+			{
+				return Candidate;
+			}
+		}
+	}
+	return ResolveFallbackTarget(EAfterlightCameraRegister::Dialogue);
 }
 
 AActor* UAfterlightCameraSubsystem::ResolveFallbackTarget(EAfterlightCameraRegister Register) const
@@ -234,6 +309,19 @@ void UAfterlightCameraSubsystem::BeginPush(AActor* Target, const UAfterlightCame
 	PushActor = Target;
 	PushStart = Target->GetActorLocation();
 	PushEnd = PushStart + Target->GetActorForwardVector() * Recipe->PushInDistance;
+	if (AActor* Focus = ResolveFocusActor())
+	{
+		FVector FocusLocation = Focus->GetActorLocation() + FVector(0.f, 0.f, 72.f);
+		if (UAfterlightFramingTargetsComponent* Framing = Focus->FindComponentByClass<UAfterlightFramingTargetsComponent>())
+		{
+			FocusLocation = Framing->GetHeadLocation();
+		}
+		if (!FAfterlightSliceProgress::IsShotValidPlacement(PushEnd, FocusLocation))
+		{
+			PushActor.Reset();
+			return;
+		}
+	}
 	PushElapsed = 0.f;
 	PushDuration = Recipe->PushInTime;
 	GetWorld()->GetTimerManager().SetTimer(PushTimer, this, &UAfterlightCameraSubsystem::TickPush, 0.016f, true);
@@ -315,10 +403,14 @@ void UAfterlightCameraSubsystem::RequestRegister(EAfterlightCameraRegister Regis
 			FocusLocation = Framing->GetHeadLocation();
 		}
 	}
-	if (Target && Register != EAfterlightCameraRegister::Explore && IsShotBlocked(Target, FocusLocation))
+	if (Target && Register != EAfterlightCameraRegister::Explore && !IsShotUsable(Target, FocusLocation))
 	{
-		UE_LOG(LogAfterlight, Verbose, TEXT("Shot for %s blocked; using fallback."), *AfterlightRegisterToName(Register).ToString());
-		Target = ResolveFallbackTarget(Register);
+		UE_LOG(LogAfterlight, Verbose, TEXT("Shot for %s invalid; using fallback."), *AfterlightRegisterToName(Register).ToString());
+		Target = ResolveValidatedShot(ShotForRegister, Focus);
+		if (!Target)
+		{
+			Target = ResolveFallbackTarget(Register);
+		}
 		if (Target == ResolveExploreViewTarget())
 		{
 			Register = EAfterlightCameraRegister::Explore;
@@ -352,39 +444,79 @@ void UAfterlightCameraSubsystem::RequestRegister(EAfterlightCameraRegister Regis
 
 void UAfterlightCameraSubsystem::RequestShot(FName ShotId, float BlendOverride)
 {
-	if (const TWeakObjectPtr<AActor>* Found = Shots.Find(ShotId))
+	EAfterlightCameraRegister Register = EAfterlightCameraRegister::Dialogue;
+	if (ShotId == AfterlightShotIds::DialogueCloseUpCompanion)
 	{
-		if (AActor* Target = Found->Get())
+		Register = EAfterlightCameraRegister::Intimate;
+	}
+	else if (ShotId == AfterlightShotIds::RevealInsert)
+	{
+		Register = EAfterlightCameraRegister::Reveal;
+	}
+	else if (ShotId == AfterlightShotIds::ThreatPressure)
+	{
+		Register = EAfterlightCameraRegister::Threat;
+	}
+	else if (ShotId == AfterlightShotIds::WakeEstablish)
+	{
+		Register = EAfterlightCameraRegister::Cinematic;
+		if (const TWeakObjectPtr<AActor>* Found = Shots.Find(ShotId))
 		{
-			EAfterlightCameraRegister Register = EAfterlightCameraRegister::Dialogue;
-			if (ShotId == AfterlightShotIds::DialogueCloseUpCompanion)
+			if (AActor* WakeCam = Found->Get())
 			{
-				Register = EAfterlightCameraRegister::Intimate;
+				ActiveShotId = ShotId;
+				const UAfterlightCameraRecipe* Recipe = GetRecipe(Register);
+				ApplyRecipeToActor(WakeCam, Recipe, ResolveFocusActor());
+				const float Blend = BlendOverride >= 0.f ? BlendOverride : (Recipe ? Recipe->BlendTime : 0.75f);
+				ApplyViewTarget(WakeCam, Blend, Recipe ? static_cast<EViewTargetBlendFunction>(Recipe->BlendFunction) : VTBlend_Cubic);
+				CurrentRegister = Register;
+				if (Authority != EAfterlightCameraAuthority::Sequencer)
+				{
+					Authority = EAfterlightCameraAuthority::Register;
+				}
+				return;
 			}
-			else if (ShotId == AfterlightShotIds::RevealInsert)
-			{
-				Register = EAfterlightCameraRegister::Reveal;
-			}
-			else if (ShotId == AfterlightShotIds::ThreatPressure)
-			{
-				Register = EAfterlightCameraRegister::Threat;
-			}
-			ActiveShotId = ShotId;
-			const UAfterlightCameraRecipe* Recipe = GetRecipe(Register);
-			AActor* Focus = ResolveFocusActor();
-			ApplyRecipeToActor(Target, Recipe, Focus);
-			const float Blend = BlendOverride >= 0.f ? BlendOverride : (Recipe ? Recipe->BlendTime : 0.75f);
-			ApplyViewTarget(Target, Blend, Recipe ? static_cast<EViewTargetBlendFunction>(Recipe->BlendFunction) : VTBlend_Cubic);
-			BeginPush(Target, Recipe);
-			CurrentRegister = Register;
-			if (Authority != EAfterlightCameraAuthority::Sequencer)
-			{
-				Authority = EAfterlightCameraAuthority::Register;
-			}
-			return;
+		}
+		RequestRegister(EAfterlightCameraRegister::Explore, BlendOverride);
+		return;
+	}
+
+	AActor* Focus = ResolveFocusActor();
+	AActor* Target = ResolveValidatedShot(ShotId, Focus);
+	if (!Target)
+	{
+		RequestRegister(Register, BlendOverride);
+		return;
+	}
+
+	FName ChosenId = ShotId;
+	for (const TPair<FName, TWeakObjectPtr<AActor>>& Pair : Shots)
+	{
+		if (Pair.Value.Get() == Target)
+		{
+			ChosenId = Pair.Key;
+			break;
 		}
 	}
-	RequestRegister(EAfterlightCameraRegister::Dialogue, BlendOverride);
+	if (ChosenId == AfterlightShotIds::DialogueTwoShot)
+	{
+		Register = EAfterlightCameraRegister::Dialogue;
+	}
+
+	ActiveShotId = ChosenId;
+	const UAfterlightCameraRecipe* Recipe = GetRecipe(Register);
+	ApplyRecipeToActor(Target, Recipe, Focus);
+	const float Blend = BlendOverride >= 0.f ? BlendOverride : (Recipe ? Recipe->BlendTime : 0.75f);
+	ApplyViewTarget(Target, Blend, Recipe ? static_cast<EViewTargetBlendFunction>(Recipe->BlendFunction) : VTBlend_Cubic);
+	if (Register != EAfterlightCameraRegister::Explore)
+	{
+		BeginPush(Target, Recipe);
+	}
+	CurrentRegister = Register;
+	if (Authority != EAfterlightCameraAuthority::Sequencer)
+	{
+		Authority = EAfterlightCameraAuthority::Register;
+	}
 }
 
 void UAfterlightCameraSubsystem::ReleaseToExplore(float BlendOverride)

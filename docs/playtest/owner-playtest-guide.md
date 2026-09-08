@@ -11,9 +11,9 @@ This is for playing the current vertical slice. You do not need Unreal knowledge
 .\afterlight.ps1 play
 ```
 
-3. When the Unreal Editor window is ready, click the 3D view once.
-4. Press **Alt+P** (or the green Play button).
-5. On the black **AFTERLIGHT** card, click or press any key.
+3. When the Unreal Editor window is ready, click it once.
+4. Press **Alt+P**. Play starts in a **New Editor Window** titled `AFTERLIGHT Preview` (960x540, not the Outliner viewport). The main editor may minimize.
+5. Click inside that Preview window. On the black **AFTERLIGHT** card, **Left Click**, or press **Space** / **Enter**. Do not use the editor Outliner.
 
 The map is `/Game/Environments/Slice01/L_Slice01_Greybox`. You should not need to pick a map.
 

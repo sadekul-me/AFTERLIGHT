@@ -1,41 +1,113 @@
 #include "Slice/AfterlightLanternDrone.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SpotLightComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
+
+namespace
+{
+	UMaterialInstanceDynamic* DroneColor(UObject* Outer, const FLinearColor& Color)
+	{
+		UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+		if (!Base)
+		{
+			return nullptr;
+		}
+		UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Base, Outer);
+		Mid->SetVectorParameterValue(TEXT("Color"), Color);
+		return Mid;
+	}
+
+	UStaticMeshComponent* MakeDronePart(AActor* Owner, USceneComponent* Parent, FName Name, UStaticMesh* Mesh,
+		const FVector& Location, const FRotator& Rotation, const FVector& Scale, UMaterialInstanceDynamic* Mid)
+	{
+		UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(Owner, Name);
+		Part->SetupAttachment(Parent);
+		Part->SetStaticMesh(Mesh);
+		Part->SetRelativeLocation(Location);
+		Part->SetRelativeRotation(Rotation);
+		Part->SetRelativeScale3D(Scale);
+		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Part->SetCastShadow(true);
+		if (Mid)
+		{
+			Part->SetMaterial(0, Mid);
+		}
+		Part->RegisterComponent();
+		return Part;
+	}
+}
 
 AAfterlightLanternDrone::AAfterlightLanternDrone()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
 	SetRootComponent(Body);
-	Body->SetWorldScale3D(FVector(0.45f, 0.45f, 0.28f));
+	Body->SetWorldScale3D(FVector(1.f, 1.f, 1.f));
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	Spotlight = CreateDefaultSubobject<USpotLightComponent>(TEXT("Spotlight"));
 	Spotlight->SetupAttachment(Body);
+	Spotlight->SetRelativeLocation(FVector(18.f, 0.f, -8.f));
 	Spotlight->SetRelativeRotation(FRotator(-70.f, 0.f, 0.f));
-	Spotlight->SetIntensity(12000.f);
-	Spotlight->SetInnerConeAngle(12.f);
-	Spotlight->SetOuterConeAngle(28.f);
-	Spotlight->SetAttenuationRadius(900.f);
-	Spotlight->SetLightColor(FLinearColor(0.92f, 0.95f, 1.f));
+	Spotlight->SetIntensity(14000.f);
+	Spotlight->SetInnerConeAngle(10.f);
+	Spotlight->SetOuterConeAngle(26.f);
+	Spotlight->SetAttenuationRadius(1100.f);
+	Spotlight->SetLightColor(FLinearColor(0.72f, 0.9f, 1.f));
+
+	Beacon = CreateDefaultSubobject<UPointLightComponent>(TEXT("Beacon"));
+	Beacon->SetupAttachment(Body);
+	Beacon->SetRelativeLocation(FVector(0.f, 0.f, 16.f));
+	Beacon->SetIntensity(6.5f);
+	Beacon->SetAttenuationRadius(280.f);
+	Beacon->SetLightColor(FLinearColor(0.55f, 0.88f, 1.f));
+	Beacon->SetCastShadows(false);
 
 	Label = CreateDefaultSubobject<UTextRenderComponent>(TEXT("Label"));
 	Label->SetupAttachment(Body);
-	Label->SetRelativeLocation(FVector(0.f, 0.f, 40.f));
+	Label->SetRelativeLocation(FVector(0.f, 0.f, 28.f));
 	Label->SetHorizontalAlignment(EHTA_Center);
 	Label->SetText(FText::FromString(TEXT("HELION")));
-	Label->SetTextRenderColor(FColor(180, 200, 220));
-	Label->SetWorldSize(22.f);
+	Label->SetTextRenderColor(FColor(140, 210, 230));
+	Label->SetWorldSize(14.f);
 }
 
 void AAfterlightLanternDrone::BeginPlay()
 {
 	Super::BeginPlay();
-	if (UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere")))
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
+	UMaterialInstanceDynamic* Hull = DroneColor(this, FLinearColor(0.07f, 0.09f, 0.12f));
+	UMaterialInstanceDynamic* Accent = DroneColor(this, FLinearColor(0.18f, 0.55f, 0.72f));
+	UMaterialInstanceDynamic* Lens = DroneColor(this, FLinearColor(0.85f, 0.95f, 1.f));
+	if (Sphere)
 	{
 		Body->SetStaticMesh(Sphere);
+		Body->SetRelativeScale3D(FVector(0.38f, 0.38f, 0.22f));
+		if (Hull)
+		{
+			Body->SetMaterial(0, Hull);
+		}
+	}
+	if (Cylinder)
+	{
+		MakeDronePart(this, Body, TEXT("Ring"), Cylinder, FVector(0.f, 0.f, 4.f), FRotator::ZeroRotator, FVector(0.55f, 0.55f, 0.06f), Hull);
+		MakeDronePart(this, Body, TEXT("Mast"), Cylinder, FVector(0.f, 0.f, 18.f), FRotator::ZeroRotator, FVector(0.08f, 0.08f, 0.16f), Accent);
+	}
+	if (Cone)
+	{
+		MakeDronePart(this, Body, TEXT("Lens"), Cone, FVector(22.f, 0.f, -6.f), FRotator(-80.f, 0.f, 0.f), FVector(0.18f, 0.18f, 0.22f), Lens);
+	}
+	if (Cube)
+	{
+		MakeDronePart(this, Body, TEXT("FinL"), Cube, FVector(-8.f, 22.f, 2.f), FRotator(0.f, 18.f, 12.f), FVector(0.22f, 0.04f, 0.12f), Hull);
+		MakeDronePart(this, Body, TEXT("FinR"), Cube, FVector(-8.f, -22.f, 2.f), FRotator(0.f, -18.f, -12.f), FVector(0.22f, 0.04f, 0.12f), Hull);
+		MakeDronePart(this, Body, TEXT("ArmF"), Cube, FVector(16.f, 0.f, 6.f), FRotator::ZeroRotator, FVector(0.18f, 0.05f, 0.05f), Accent);
 	}
 }
 
@@ -70,11 +142,16 @@ void AAfterlightLanternDrone::Tick(float DeltaSeconds)
 	const float Alpha = FMath::Clamp(SweepElapsed / SweepDuration, 0.f, 1.f);
 	const float Ease = Alpha * Alpha * (3.f - 2.f * Alpha);
 	SetActorLocation(FMath::Lerp(SweepStart, SweepEnd, Ease));
+	SetActorRotation(FRotator(0.f, SweepElapsed * 40.f, FMath::Sin(SweepElapsed * 1.4f) * 8.f));
 	ScanYaw += DeltaSeconds * 55.f;
 	if (Spotlight)
 	{
 		Spotlight->SetRelativeRotation(FRotator(-62.f - FMath::Sin(SweepElapsed * 1.7f) * 8.f, FMath::Sin(ScanYaw * 0.08f) * 18.f, 0.f));
-		Spotlight->SetIntensity(9000.f + FMath::Sin(SweepElapsed * 6.f) * 2500.f);
+		Spotlight->SetIntensity(11000.f + FMath::Sin(SweepElapsed * 6.f) * 2800.f);
+	}
+	if (Beacon)
+	{
+		Beacon->SetIntensity(4.5f + FMath::Abs(FMath::Sin(SweepElapsed * 8.f)) * 4.f);
 	}
 	if (Alpha >= 1.f)
 	{

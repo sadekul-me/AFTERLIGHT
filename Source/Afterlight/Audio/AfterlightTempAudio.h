@@ -15,7 +15,8 @@ enum class EAfterlightTempBed : uint8
 	Drone,
 	Pump,
 	Warning,
-	Sting
+	Sting,
+	Footstep
 };
 
 struct AFTERLIGHT_API FAfterlightTempAudio

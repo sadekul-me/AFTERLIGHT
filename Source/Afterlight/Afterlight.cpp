@@ -7,6 +7,10 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMemory.h"
+#include "HAL/FileManager.h"
+#include "Misc/Paths.h"
+#include "UnrealClient.h"
 #include "Templates/Function.h"
 #include "Core/AfterlightLog.h"
 
@@ -181,6 +185,66 @@ static FAutoConsoleCommand AfterlightSmokeSliceCommand(
 				UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_SLICE_SMOKE=%s\n%s"), bOk ? TEXT("PASS") : TEXT("FAIL"), *Report);
 			}
 		});
+	}));
+
+static TAutoConsoleVariable<int32> CVarAfterlightQaAuto(
+	TEXT("Afterlight.QaAuto"),
+	0,
+	TEXT("If 1, capture Saved/QA screenshots at Slice01 visual beats."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<int32> CVarAfterlightQaDrive(
+	TEXT("Afterlight.QaDrive"),
+	0,
+	TEXT("If 1, walk the owner-play route and pick the first choice for unattended QA."),
+	ECVF_Default);
+
+bool AfterlightQaAutoEnabled()
+{
+	return CVarAfterlightQaAuto.GetValueOnAnyThread() != 0;
+}
+
+bool AfterlightQaDriveEnabled()
+{
+	return CVarAfterlightQaDrive.GetValueOnAnyThread() != 0;
+}
+
+void AfterlightCaptureQaShot(const TCHAR* Name)
+{
+	const FPlatformMemoryStats Mem = FPlatformMemory::GetStats();
+	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_MEM usedPhys=%.2fGB availPhys=%.2fGB usedVirt=%.2fGB availVirt=%.2fGB"),
+		Mem.UsedPhysical / (1024.0 * 1024.0 * 1024.0),
+		Mem.AvailablePhysical / (1024.0 * 1024.0 * 1024.0),
+		Mem.UsedVirtual / (1024.0 * 1024.0 * 1024.0),
+		Mem.AvailableVirtual / (1024.0 * 1024.0 * 1024.0));
+	const FString ShotName = Name && *Name ? FString(Name) : FDateTime::Now().ToString(TEXT("HHmmss"));
+	const FString Dir = FPaths::ProjectSavedDir() / TEXT("QA");
+	IFileManager::Get().MakeDirectory(*Dir, true);
+	const FString Path = FPaths::ConvertRelativePathToFull(Dir / (ShotName + TEXT(".png")));
+	FScreenshotRequest::RequestScreenshot(Path, false, false);
+	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_QA_SHOT=%s"), *Path);
+}
+
+static FAutoConsoleCommand AfterlightAcceptEntryCommand(
+	TEXT("Afterlight.AcceptEntry"),
+	TEXT("Dismiss the owner entry card if it is showing."),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		AfterlightForEachWorld([](UWorld* World)
+		{
+			for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+			{
+				It->TryAcceptContinue();
+			}
+		});
+	}));
+
+static FAutoConsoleCommand AfterlightQaShotCommand(
+	TEXT("Afterlight.QaShot"),
+	TEXT("Capture an internal QA screenshot under Saved/QA (not for Git)."),
+	FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+	{
+		AfterlightCaptureQaShot(Args.Num() > 0 ? *Args[0] : nullptr);
 	}));
 
 void FAfterlightModule::StartupModule()

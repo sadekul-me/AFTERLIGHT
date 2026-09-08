@@ -22,6 +22,7 @@ public:
 	AAfterlightCharacter();
 
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
@@ -67,7 +68,7 @@ protected:
 	TObjectPtr<UInputAction> DebugAction;
 
 	UPROPERTY(EditAnywhere, Category = "Afterlight|Movement")
-	float WalkSpeed = 280.f;
+	float WalkSpeed = 210.f;
 
 	UPROPERTY(EditAnywhere, Category = "Afterlight|Movement")
 	float DevFastSpeed = 520.f;

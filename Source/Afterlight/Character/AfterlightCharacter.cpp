@@ -9,10 +9,13 @@
 #include "Camera/AfterlightFramingTargetsComponent.h"
 #include "Camera/AfterlightCameraRecipe.h"
 #include "Core/AfterlightPlayerContextSubsystem.h"
+#include "Character/AfterlightPlaceholderVisuals.h"
+#include "Camera/AfterlightSliceProgress.h"
+#include "Engine/World.h"
 
 AAfterlightCharacter::AAfterlightCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
@@ -29,11 +32,12 @@ AAfterlightCharacter::AAfterlightCharacter()
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 360.f;
+	CameraBoom->TargetArmLength = 340.f;
 	CameraBoom->bUsePawnControlRotation = true;
-	CameraBoom->SocketOffset = FVector(0.f, 52.f, 52.f);
+	CameraBoom->SocketOffset = FVector(0.f, 48.f, 64.f);
 	CameraBoom->bDoCollisionTest = true;
-	CameraBoom->ProbeSize = 16.f;
+	CameraBoom->ProbeSize = 28.f;
+	CameraBoom->ProbeChannel = ECC_Camera;
 	CameraBoom->bEnableCameraLag = true;
 	CameraBoom->CameraLagSpeed = 5.5f;
 	CameraBoom->bEnableCameraRotationLag = true;
@@ -55,12 +59,31 @@ void AAfterlightCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	FAfterlightPlaceholderVisuals::Attach(this, false);
 	if (UWorld* World = GetWorld())
 	{
 		if (UAfterlightPlayerContextSubsystem* Context = World->GetSubsystem<UAfterlightPlayerContextSubsystem>())
 		{
 			Context->RegisterProtagonist(this);
 		}
+	}
+}
+
+void AAfterlightCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	FAfterlightPlaceholderVisuals::Tick(this, DeltaSeconds);
+	if (!FollowCamera || !CameraBoom)
+	{
+		return;
+	}
+	const FVector CamLoc = FollowCamera->GetComponentLocation();
+	if (FAfterlightSliceProgress::IsCameraBelowFloor(CamLoc.Z, 28.f))
+	{
+		CameraBoom->TargetArmLength = FMath::Clamp(CameraBoom->TargetArmLength * 0.8f, 120.f, 340.f);
+		FVector Offset = CameraBoom->SocketOffset;
+		Offset.Z = FMath::Max(Offset.Z, 78.f);
+		CameraBoom->SocketOffset = Offset;
 	}
 }
 
@@ -102,6 +125,17 @@ void AAfterlightCharacter::Look(const FInputActionValue& Value)
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
+	if (Controller)
+	{
+		FRotator Rot = GetControlRotation();
+		float Pitch = Rot.Pitch;
+		if (Pitch > 180.f)
+		{
+			Pitch -= 360.f;
+		}
+		Rot.Pitch = FMath::Clamp(Pitch, -48.f, 18.f);
+		Controller->SetControlRotation(Rot);
+	}
 }
 
 void AAfterlightCharacter::Interact()

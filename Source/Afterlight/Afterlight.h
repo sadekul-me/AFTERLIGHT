@@ -3,6 +3,10 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
+void AfterlightCaptureQaShot(const TCHAR* Name);
+bool AfterlightQaAutoEnabled();
+bool AfterlightQaDriveEnabled();
+
 class FAfterlightModule : public IModuleInterface
 {
 public:

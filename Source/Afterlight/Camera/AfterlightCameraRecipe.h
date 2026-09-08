@@ -71,10 +71,10 @@ public:
 	float ShoulderSide = 1.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Afterlight|Framing")
-	float CameraHeight = 52.f;
+	float CameraHeight = 64.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Afterlight|Framing")
-	float ArmLength = 360.f;
+	float ArmLength = 340.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Afterlight|Blend")
 	float BlendTime = 0.75f;
@@ -103,6 +103,7 @@ namespace AfterlightShotIds
 	const FName DialogueOTSProtagonist(TEXT("Dialogue.OTS.Protagonist"));
 	const FName DialogueTwoShot(TEXT("Dialogue.TwoShot"));
 	const FName DialogueCloseUpCompanion(TEXT("Dialogue.CloseUp.Companion"));
+	const FName WakeEstablish(TEXT("Wake.Establish"));
 	const FName RevealInsert(TEXT("Reveal.Insert"));
 	const FName ThreatPressure(TEXT("Threat.Pressure"));
 }

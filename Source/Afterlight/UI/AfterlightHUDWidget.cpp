@@ -16,6 +16,9 @@
 #include "EngineUtils.h"
 #include "Engine/GameInstance.h"
 #include "Types/SlateEnums.h"
+#include "Input/Events.h"
+#include "InputCoreTypes.h"
+#include "Framework/Application/SlateApplication.h"
 
 TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 {
@@ -54,22 +57,22 @@ TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 	}
 	if (!DialogueBlock.IsValid())
 	{
-		UTextBlock* Dialogue = MakeText(TEXT("Dialogue"), FLinearColor(0.93f, 0.9f, 0.84f), 21);
+		UTextBlock* Dialogue = MakeText(TEXT("Dialogue"), FLinearColor(0.9f, 0.86f, 0.78f), 18);
 		Dialogue->SetAutoWrapText(true);
 		if (UCanvasPanelSlot* DialogueSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Dialogue))
 		{
-			DialogueSlot->SetAnchors(FAnchors(0.5f, 0.7f));
+			DialogueSlot->SetAnchors(FAnchors(0.5f, 0.66f));
 			DialogueSlot->SetAlignment(FVector2D(0.5f, 1.f));
-			DialogueSlot->SetSize(FVector2D(900.f, 120.f));
+			DialogueSlot->SetSize(FVector2D(760.f, 96.f));
 		}
 		DialogueBlock = Dialogue;
 	}
 	if (!ChoiceBlock.IsValid())
 	{
-		UTextBlock* Choices = MakeText(TEXT("Choices"), FLinearColor(0.9f, 0.88f, 0.82f), 18);
+		UTextBlock* Choices = MakeText(TEXT("Choices"), FLinearColor(0.96f, 0.93f, 0.86f), 22);
 		if (UCanvasPanelSlot* ChoiceSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Choices))
 		{
-			ChoiceSlot->SetAnchors(FAnchors(0.5f, 0.78f));
+			ChoiceSlot->SetAnchors(FAnchors(0.5f, 0.74f));
 			ChoiceSlot->SetAlignment(FVector2D(0.5f, 0.f));
 			ChoiceSlot->SetAutoSize(true);
 		}
@@ -148,6 +151,13 @@ TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 	return Super::RebuildWidget();
 }
 
+void UAfterlightHUDWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	SetIsFocusable(false);
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+}
+
 void UAfterlightHUDWidget::SetCineMode(bool bEnabled)
 {
 	bCineMode = bEnabled;
@@ -173,7 +183,7 @@ void UAfterlightHUDWidget::SetDialogue(FName SpeakerId, const FText& Line, const
 	bDialogueVisible = true;
 	if (DialogueBlock.IsValid())
 	{
-		const FString Body = SpeakerId.IsNone() || SpeakerId == TEXT("Recording")
+		const FString Body = SpeakerId.IsNone() || SpeakerId == TEXT("Recording") || Choices.Num() > 0
 			? Line.ToString()
 			: FString::Printf(TEXT("%s\n%s"), *SpeakerId.ToString(), *Line.ToString());
 		DialogueBlock->SetText(FText::FromString(Body));
@@ -285,6 +295,8 @@ void UAfterlightHUDWidget::SetEndFooter(const FText& Text)
 void UAfterlightHUDWidget::SetHoldCard(bool bHold)
 {
 	bHoldCard = bHold;
+	SetIsFocusable(bHold);
+	SetVisibility(bHold ? ESlateVisibility::Visible : ESlateVisibility::SelfHitTestInvisible);
 	if (bHold && PromptBlock.IsValid())
 	{
 		PromptBlock->SetVisibility(ESlateVisibility::Hidden);
@@ -293,11 +305,58 @@ void UAfterlightHUDWidget::SetHoldCard(bool bHold)
 	{
 		EndFooterBlock->SetVisibility(ESlateVisibility::Hidden);
 	}
+	if (bHold)
+	{
+		SetKeyboardFocus();
+	}
+	else if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetAllUserFocusToGameViewport();
+	}
+}
+
+bool UAfterlightHUDWidget::TryAcceptHoldCardInput(const FKey& Key)
+{
+	if (!bHoldCard)
+	{
+		return false;
+	}
+	if (Key != EKeys::LeftMouseButton && Key != EKeys::SpaceBar && Key != EKeys::Enter)
+	{
+		return false;
+	}
+	if (AAfterlightPlayerController* PC = GetOwningPlayer<AAfterlightPlayerController>())
+	{
+		return PC->TryOwnerContinueInput();
+	}
+	return false;
+}
+
+FReply UAfterlightHUDWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (TryAcceptHoldCardInput(InMouseEvent.GetEffectingButton()))
+	{
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+FReply UAfterlightHUDWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (TryAcceptHoldCardInput(InKeyEvent.GetKey()))
+	{
+		return FReply::Handled();
+	}
+	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
 }
 
 void UAfterlightHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (bHoldCard && !HasKeyboardFocus())
+	{
+		SetKeyboardFocus();
+	}
 	RefreshDebug();
 }
 

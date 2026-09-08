@@ -46,15 +46,16 @@ UAfterlightCameraRecipe* UAfterlightCameraRecipe::CreateDefault(UObject* Outer, 
 		Recipe->Aperture = 2.8f;
 		Recipe->BlendTime = 0.85f;
 		Recipe->FocusMode = EAfterlightCameraFocusMode::Target;
-		Recipe->bEnableDOF = true;
+		Recipe->bEnableDOF = false;
+		Recipe->Aperture = 4.5f;
 		Recipe->ShoulderSide = 1.f;
 		break;
 	case EAfterlightCameraRegister::Intimate:
-		Recipe->FocalLength = 75.f;
-		Recipe->Aperture = 2.0f;
+		Recipe->FocalLength = 50.f;
+		Recipe->Aperture = 4.0f;
 		Recipe->BlendTime = 0.7f;
 		Recipe->FocusMode = EAfterlightCameraFocusMode::Target;
-		Recipe->bEnableDOF = true;
+		Recipe->bEnableDOF = false;
 		Recipe->ShoulderSide = 1.f;
 		break;
 	case EAfterlightCameraRegister::Reveal:
@@ -84,9 +85,9 @@ UAfterlightCameraRecipe* UAfterlightCameraRecipe::CreateDefault(UObject* Outer, 
 	default:
 		Recipe->FocalLength = 40.f;
 		Recipe->Aperture = 4.f;
-		Recipe->GameplayFOV = 58.f;
+		Recipe->GameplayFOV = 56.f;
 		Recipe->ArmLength = 360.f;
-		Recipe->CameraHeight = 52.f;
+		Recipe->CameraHeight = 72.f;
 		Recipe->ShoulderSide = 1.f;
 		Recipe->BlendTime = 0.8f;
 		Recipe->MovementLag = 5.5f;

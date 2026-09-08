@@ -61,6 +61,8 @@ private:
 	UFUNCTION()
 	void TickPush();
 	bool IsShotBlocked(AActor* CameraActor, const FVector& FocusLocation) const;
+	bool IsShotUsable(AActor* CameraActor, const FVector& FocusLocation) const;
+	AActor* ResolveValidatedShot(FName ShotId, AActor* Focus) const;
 	AActor* ResolveFallbackTarget(EAfterlightCameraRegister Register) const;
 	APlayerController* ResolveController() const;
 	AActor* ResolveExploreViewTarget() const;

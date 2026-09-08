@@ -34,6 +34,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Afterlight|Input")
 	void SetInputState(EAfterlightInputState NewState);
 
+	void ApplyHoldCardFocus();
+	bool TryOwnerContinueInput();
+
 	UFUNCTION(BlueprintPure, Category = "Afterlight|Input")
 	EAfterlightInputState GetInputState() const { return InputState; }
 

@@ -1,5 +1,6 @@
 #include "Character/AfterlightPlayerController.h"
 #include "Character/AfterlightCharacter.h"
+#include "UI/AfterlightHUDWidget.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputAction.h"
@@ -20,6 +21,9 @@
 #include "Engine/LocalPlayer.h"
 #include "HAL/PlatformMisc.h"
 #include "Engine/Engine.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Core/AfterlightLog.h"
 
 AAfterlightPlayerController::AAfterlightPlayerController()
 {
@@ -34,6 +38,11 @@ void AAfterlightPlayerController::BeginPlay()
 		Context->RegisterController(this);
 	}
 	SetInputState(EAfterlightInputState::Full);
+	if (PlayerCameraManager)
+	{
+		PlayerCameraManager->ViewPitchMin = -48.f;
+		PlayerCameraManager->ViewPitchMax = 18.f;
+	}
 }
 
 void AAfterlightPlayerController::OnPossess(APawn* InPawn)
@@ -107,7 +116,8 @@ void AAfterlightPlayerController::EnsureRuntimeInput()
 	MappingContext->MapKey(DebugAction, EKeys::F8);
 	MappingContext->MapKey(Choice1Action, EKeys::One);
 	MappingContext->MapKey(Choice2Action, EKeys::Two);
-	MappingContext->MapKey(ContinueAction, EKeys::AnyKey);
+	MappingContext->MapKey(ContinueAction, EKeys::SpaceBar);
+	MappingContext->MapKey(ContinueAction, EKeys::Enter);
 	MappingContext->MapKey(ContinueAction, EKeys::LeftMouseButton);
 	MappingContext->MapKey(ReplayAction, EKeys::R);
 	MappingContext->MapKey(ExitSliceAction, EKeys::Escape);
@@ -170,13 +180,21 @@ void AAfterlightPlayerController::SetInputState(EAfterlightInputState NewState)
 {
 	InputState = NewState;
 	ApplyInputStateToPawn();
+	bool bHoldCard = false;
 	bool bCine = false;
 	if (UWorld* World = GetWorld())
 	{
 		if (UAfterlightPresentationSubsystem* Presentation = World->GetSubsystem<UAfterlightPresentationSubsystem>())
 		{
 			bCine = Presentation->IsCineMode();
+			bHoldCard = Presentation->IsHoldCard();
 		}
+	}
+	const bool bEntryOrEnd = NewState == EAfterlightInputState::Locked && bHoldCard;
+	if (bEntryOrEnd)
+	{
+		ApplyHoldCardFocus();
+		return;
 	}
 	const bool bShowCursor = NewState == EAfterlightInputState::Constrained && !bCine;
 	bShowMouseCursor = bShowCursor;
@@ -189,6 +207,52 @@ void AAfterlightPlayerController::SetInputState(EAfterlightInputState NewState)
 	{
 		SetInputMode(FInputModeGameOnly());
 	}
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetAllUserFocusToGameViewport();
+	}
+}
+
+void AAfterlightPlayerController::ApplyHoldCardFocus()
+{
+	bShowMouseCursor = true;
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
+	FInputModeGameAndUI Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	Mode.SetHideCursorDuringCapture(false);
+	if (UWorld* World = GetWorld())
+	{
+		if (UAfterlightPresentationSubsystem* Presentation = World->GetSubsystem<UAfterlightPresentationSubsystem>())
+		{
+			if (UAfterlightHUDWidget* Widget = Presentation->GetWidget())
+			{
+				Mode.SetWidgetToFocus(Widget->TakeWidget());
+				Widget->SetKeyboardFocus();
+			}
+		}
+	}
+	SetInputMode(Mode);
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetAllUserFocusToGameViewport();
+	}
+}
+
+bool AAfterlightPlayerController::TryOwnerContinueInput()
+{
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
+		{
+			if (It->TryAcceptContinue())
+			{
+				return true;
+			}
+			return false;
+		}
+	}
+	return false;
 }
 
 void AAfterlightPlayerController::ApplyInputStateToPawn()
@@ -196,9 +260,8 @@ void AAfterlightPlayerController::ApplyInputStateToPawn()
 	if (AAfterlightCharacter* AfterlightPawn = GetAfterlightPawn())
 	{
 		const bool bFull = InputState == EAfterlightInputState::Full;
-		const bool bCanLook = InputState == EAfterlightInputState::Full || InputState == EAfterlightInputState::Constrained;
 		AfterlightPawn->SetMoveEnabled(bFull);
-		AfterlightPawn->SetLookEnabled(bCanLook);
+		AfterlightPawn->SetLookEnabled(bFull);
 	}
 }
 
@@ -211,6 +274,16 @@ void AAfterlightPlayerController::HandleMove(const FInputActionValue& Value)
 	if (AAfterlightCharacter* AfterlightPawn = GetAfterlightPawn())
 	{
 		AfterlightPawn->Move(Value);
+		if (UWorld* MoveWorld = GetWorld())
+		{
+			static float LastMoveLog = -100.f;
+			const float Now = MoveWorld->GetTimeSeconds();
+			if (Now - LastMoveLog > 1.5f)
+			{
+				LastMoveLog = Now;
+				UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_MOVE X=%.0f"), AfterlightPawn->GetActorLocation().X);
+			}
+		}
 	}
 	if (UWorld* World = GetWorld())
 	{
@@ -288,44 +361,17 @@ void AAfterlightPlayerController::ChooseDialogue(int32 Index)
 
 void AAfterlightPlayerController::HandleChoice1()
 {
-	if (UWorld* World = GetWorld())
-	{
-		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
-		{
-			if (It->TryAcceptContinue())
-			{
-				return;
-			}
-		}
-	}
 	ChooseDialogue(0);
 }
 
 void AAfterlightPlayerController::HandleChoice2()
 {
-	if (UWorld* World = GetWorld())
-	{
-		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
-		{
-			if (It->TryAcceptContinue())
-			{
-				return;
-			}
-		}
-	}
 	ChooseDialogue(1);
 }
 
 void AAfterlightPlayerController::HandleContinue()
 {
-	if (UWorld* World = GetWorld())
-	{
-		for (TActorIterator<AAfterlightSlice01Director> It(World); It; ++It)
-		{
-			It->TryAcceptContinue();
-			return;
-		}
-	}
+	TryOwnerContinueInput();
 }
 
 void AAfterlightPlayerController::HandleReplay()

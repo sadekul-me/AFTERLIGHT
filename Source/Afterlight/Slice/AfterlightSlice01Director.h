@@ -45,10 +45,17 @@ protected:
 	void BuildWorld();
 	void BindSystems();
 	void BuildDialogue();
-	void SpawnShot(FName ShotId, const FVector& Location, const FVector& LookAt, uint8 Register);
 	AStaticMeshActor* SpawnBox(const FVector& Location, const FVector& Scale, const FLinearColor& Color);
 	void SpawnSign(const FVector& Location, const FRotator& Rotation, const FString& Text, float Size, const FColor& Color);
 	APointLight* SpawnLight(const FVector& Location, const FLinearColor& Color, float Intensity, float Radius);
+	ACineCameraActor* SpawnShot(FName ShotId, const FVector& Location, const FVector& LookAt, uint8 Register);
+	void AimShot(ACineCameraActor* Camera, const FVector& Location, const FVector& LookAt);
+	void RebuildContactShots();
+	void RebuildQuietShot();
+	void RebuildThreatShot();
+	void TryGrantEnteredCut();
+	void ContainPlayer();
+	void MaybeStartCutTalk();
 
 	void SetBeat(FName BeatId);
 	void ApplyInputFull();
@@ -108,6 +115,16 @@ protected:
 	UPROPERTY()
 	TObjectPtr<AAfterlightLanternDrone> Drone;
 	UPROPERTY()
+	TObjectPtr<ACineCameraActor> ContactOTS;
+	UPROPERTY()
+	TObjectPtr<ACineCameraActor> ContactPlayerOTS;
+	UPROPERTY()
+	TObjectPtr<ACineCameraActor> ContactTwoShot;
+	UPROPERTY()
+	TObjectPtr<ACineCameraActor> ContactClose;
+	UPROPERTY()
+	TObjectPtr<ACineCameraActor> ThreatShot;
+	UPROPERTY()
 	TObjectPtr<ACineCameraActor> WarningCamera;
 	UPROPERTY()
 	TObjectPtr<APointLight> WitnessLed;
@@ -150,6 +167,7 @@ protected:
 	FTimerHandle TitleBlackHandle;
 	FTimerHandle EntryHandle;
 	FTimerHandle EndCardHandle;
+	FTimerHandle QaHandle;
 
 	TArray<FText> WarningLines;
 	int32 WarningLineIndex = 0;
@@ -177,4 +195,6 @@ protected:
 	float HideRecoverElapsed = 0.f;
 	float HideRecoverDuration = 1.2f;
 	float WarningPresentElapsed = 0.f;
+	bool bCutTalkPending = false;
+	float CutLeadElapsed = 0.f;
 };

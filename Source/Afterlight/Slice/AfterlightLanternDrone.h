@@ -6,6 +6,7 @@
 
 class UStaticMeshComponent;
 class USpotLightComponent;
+class UPointLightComponent;
 class UTextRenderComponent;
 
 UCLASS()
@@ -29,6 +30,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USpotLightComponent> Spotlight;
+
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UPointLightComponent> Beacon;
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UTextRenderComponent> Label;

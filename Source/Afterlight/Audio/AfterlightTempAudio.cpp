@@ -54,6 +54,12 @@ namespace
 				PhaseA += 2.f * PI * 740.f / Rate;
 				S = static_cast<int16>(FMath::Sin(PhaseA) * 9000.f * FMath::Clamp(1.f - (i / static_cast<float>(Samples)), 0.f, 1.f));
 				break;
+			case EAfterlightTempBed::Footstep:
+			{
+				const float Env = FMath::Clamp(1.f - (i / static_cast<float>(Samples)), 0.f, 1.f);
+				S = static_cast<int16>(SampleNoise(0.35f * Env) + FMath::Sin(i * 0.18f) * 2200.f * Env);
+				break;
+			}
 			default:
 				S = 0;
 				break;
@@ -70,10 +76,10 @@ USoundWaveProcedural* FAfterlightTempAudio::CreateBed(UObject* Outer, FName Name
 	USoundWaveProcedural* Wave = NewObject<USoundWaveProcedural>(Outer, Name);
 	Wave->SetSampleRate(22050);
 	Wave->NumChannels = 1;
-	Wave->bLooping = Bed != EAfterlightTempBed::Sting && Bed != EAfterlightTempBed::Warning;
+	Wave->bLooping = Bed != EAfterlightTempBed::Sting && Bed != EAfterlightTempBed::Warning && Bed != EAfterlightTempBed::Footstep;
 	Wave->SoundGroup = SOUNDGROUP_Effects;
 	Wave->bProcedural = true;
-	Wave->Duration = Wave->bLooping ? INDEFINITELY_LOOPING_DURATION : 0.45f;
+	Wave->Duration = Wave->bLooping ? INDEFINITELY_LOOPING_DURATION : (Bed == EAfterlightTempBed::Footstep ? 0.12f : 0.45f);
 	Wave->OnSoundWaveProceduralUnderflow.BindLambda([Bed](USoundWaveProcedural* Procedural, int32 SamplesNeeded)
 	{
 		QueueBed(Procedural, Bed, FMath::Clamp(SamplesNeeded, 256, 4096));

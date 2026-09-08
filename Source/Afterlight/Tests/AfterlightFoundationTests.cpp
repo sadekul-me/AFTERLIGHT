@@ -11,6 +11,7 @@
 #include "LevelSequence.h"
 #include "Character/AfterlightPlayerController.h"
 #include "UI/AfterlightPresentationFormat.h"
+#include "Camera/AfterlightSliceProgress.h"
 
 #if WITH_AUTOMATION_TESTS
 
@@ -285,7 +286,8 @@ bool FAfterlightChoicePresentationTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("No [1] debug numbering"), Formatted.Contains(TEXT("[1]")));
 	TestFalse(TEXT("No [2] debug numbering"), Formatted.Contains(TEXT("[2]")));
 	TestTrue(TEXT("Choices are stacked"), Formatted.Contains(TEXT("\n\n")));
-	TestTrue(TEXT("First option is numbered without brackets"), Formatted.StartsWith(TEXT("1")));
+	TestTrue(TEXT("First option is the spoken line"), Formatted.StartsWith(TEXT("Walk.")));
+	TestFalse(TEXT("No leading menu digits"), Formatted.StartsWith(TEXT("1")));
 	return true;
 }
 
@@ -306,6 +308,30 @@ bool FAfterlightSpokenHoldTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Long warning line holds as if spoken"), Hold >= 3.6f);
 	TestEqual(TEXT("Authored override is honored"), FAfterlightPresentationFormat::SpokenHoldSeconds(Warning, 4.2f), 4.2f);
 	TestTrue(TEXT("Short line still has a human pause"), FAfterlightPresentationFormat::SpokenHoldSeconds(FText::FromString(TEXT("No."))) >= 2.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightCutEntryProgressTest, "Afterlight.Slice01.CutEntryProgress", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightCutEntryProgressTest::RunTest(const FString& Parameters)
+{
+	TestFalse(TEXT("Wake does not enter cut"), FAfterlightSliceProgress::ShouldGrantEnteredCut(180.f, 0.f, 780.f, true, 5.f));
+	TestFalse(TEXT("No choice does not enter cut"), FAfterlightSliceProgress::ShouldGrantEnteredCut(1600.f, 0.f, 1700.f, false, 30.f));
+	TestTrue(TEXT("Corridor X grants cut"), FAfterlightSliceProgress::ShouldGrantEnteredCut(1500.f, 0.f, 1700.f, true, 1.f));
+	TestTrue(TEXT("Maya lead plus player grants cut"), FAfterlightSliceProgress::ShouldGrantEnteredCut(750.f, 20.f, 1680.f, true, 2.f));
+	TestTrue(TEXT("Timer fallback grants cut once past wake"), FAfterlightSliceProgress::ShouldGrantEnteredCut(700.f, 0.f, 900.f, true, 23.f));
+	TestFalse(TEXT("Off-axis Y does not grant cut"), FAfterlightSliceProgress::ShouldGrantEnteredCut(1500.f, 800.f, 1700.f, true, 1.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAfterlightCameraShotValidityTest, "Afterlight.Camera.ShotValidity", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+bool FAfterlightCameraShotValidityTest::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("Below floor is invalid"), FAfterlightSliceProgress::IsCameraBelowFloor(10.f, 20.f));
+	TestTrue(TEXT("Contact close-up 32cm is too close"), FAfterlightSliceProgress::IsShotTooClose(32.f, 110.f));
+	TestFalse(TEXT("Two-shot distance is usable"), FAfterlightSliceProgress::IsShotTooClose(260.f, 110.f));
+	TestTrue(TEXT("Valid placement needs height and distance"), FAfterlightSliceProgress::IsShotValidPlacement(FVector(520.f, 130.f, 168.f), FVector(780.f, 40.f, 168.f)));
+	TestFalse(TEXT("Inside-Maya placement is rejected"), FAfterlightSliceProgress::IsShotValidPlacement(FVector(748.f, 62.f, 166.f), FVector(780.f, 40.f, 168.f)));
+	TestTrue(TEXT("Playable clamp keeps Z on floor"), FMath::IsNearlyEqual(FAfterlightSliceProgress::ClampToPlayable(FVector(200.f, 0.f, -40.f)).Z, 92.f));
 	return true;
 }
 

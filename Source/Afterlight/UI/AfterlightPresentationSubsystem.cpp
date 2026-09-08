@@ -172,6 +172,7 @@ void UAfterlightPresentationSubsystem::HideTitle()
 	{
 		Widget->SetHoldCard(false);
 		Widget->HideTitle();
+		Widget->SetTitleScrimVisible(false);
 		Widget->SetEndFooter(FText::GetEmpty());
 		Widget->SetGuidance(FText::GetEmpty());
 	}
@@ -221,9 +222,13 @@ void UAfterlightPresentationSubsystem::ShowEntryCard()
 	Widget->SetTitleScrimVisible(true);
 	Widget->SetTitle(NSLOCTEXT("Afterlight", "Title", "AFTERLIGHT"));
 	Widget->SetEndFooter(FText::GetEmpty());
-	Widget->SetGuidance(NSLOCTEXT("Afterlight", "BeginPrompt", "Click / Press any key to begin"));
+	Widget->SetGuidance(NSLOCTEXT("Afterlight", "BeginPrompt", "Click, Space, or Enter to begin"));
 	Widget->SetPrompt(FText::GetEmpty());
 	GuidanceSecondsRemaining = 0.f;
+	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(Widget->GetOwningPlayer()))
+	{
+		PC->ApplyHoldCardFocus();
+	}
 }
 
 void UAfterlightPresentationSubsystem::ShowEndCard()

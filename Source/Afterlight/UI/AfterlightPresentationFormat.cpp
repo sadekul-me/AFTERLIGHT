@@ -9,7 +9,7 @@ FString FAfterlightPresentationFormat::FormatChoiceList(const TArray<FText>& Cho
 		{
 			Out += TEXT("\n\n");
 		}
-		Out += FString::Printf(TEXT("%d    %s"), i + 1, *Choices[i].ToString());
+		Out += Choices[i].ToString();
 	}
 	return Out;
 }
