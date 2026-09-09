@@ -23,14 +23,14 @@ bool FAfterlightSliceProgress::ShouldGrantEnteredCut(float PlayerX, float Player
 
 bool FAfterlightSliceProgress::IsInsidePlayableXY(float X, float Y)
 {
-	return X > 40.f && X < 4180.f && FMath::Abs(Y) < 390.f;
+	return X > 40.f && X < 4180.f && Y > -400.f && Y < 560.f;
 }
 
 FVector FAfterlightSliceProgress::ClampToPlayable(const FVector& Location)
 {
 	FVector Out = Location;
 	Out.X = FMath::Clamp(Out.X, 80.f, 4120.f);
-	Out.Y = FMath::Clamp(Out.Y, -300.f, 360.f);
+	Out.Y = FMath::Clamp(Out.Y, -360.f, 520.f);
 	Out.Z = 92.f;
 	return Out;
 }

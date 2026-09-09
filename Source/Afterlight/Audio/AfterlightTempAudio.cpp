@@ -32,27 +32,28 @@ namespace
 			switch (Bed)
 			{
 			case EAfterlightTempBed::Rain:
-				S = SampleNoise((i & 3) == 0 ? 0.18f : 0.04f);
+				S = SampleNoise((i & 3) == 0 ? 0.22f : ((i & 15) == 0 ? 0.11f : 0.035f));
 				break;
 			case EAfterlightTempBed::Electric:
 				PhaseA += 2.f * PI * 92.f / Rate;
-				S = static_cast<int16>(FMath::Sin(PhaseA) * 1800.f + SampleNoise(0.04f));
+				PhaseB += 2.f * PI * 41.f / Rate;
+				S = static_cast<int16>(FMath::Sin(PhaseA) * 1600.f + FMath::Sin(PhaseB) * 420.f + SampleNoise(0.05f));
 				break;
 			case EAfterlightTempBed::Drone:
-				PhaseA += 2.f * PI * 148.f / Rate;
-				PhaseB += 2.f * PI * 6.f / Rate;
-				S = static_cast<int16>(FMath::Sin(PhaseA) * (2200.f + FMath::Sin(PhaseB) * 400.f) + SampleNoise(0.08f));
+				PhaseA += 2.f * PI * 138.f / Rate;
+				PhaseB += 2.f * PI * 5.5f / Rate;
+				S = static_cast<int16>(FMath::Sin(PhaseA) * (2600.f + FMath::Sin(PhaseB) * 700.f) + SampleNoise(0.1f));
 				break;
 			case EAfterlightTempBed::Pump:
-				PhaseA += 2.f * PI * 54.f / Rate;
-				S = static_cast<int16>(FMath::Sin(PhaseA) * 2400.f);
+				PhaseA += 2.f * PI * 48.f / Rate;
+				S = static_cast<int16>(FMath::Sin(PhaseA) * 2200.f + ((i % 420) < 28 ? SampleNoise(0.18f) : 0));
 				break;
 			case EAfterlightTempBed::Warning:
-				S = SampleNoise(0.55f);
+				S = SampleNoise(((i / 80) % 7) == 0 ? 0.18f : 0.48f);
 				break;
 			case EAfterlightTempBed::Sting:
-				PhaseA += 2.f * PI * 740.f / Rate;
-				S = static_cast<int16>(FMath::Sin(PhaseA) * 9000.f * FMath::Clamp(1.f - (i / static_cast<float>(Samples)), 0.f, 1.f));
+				PhaseA += 2.f * PI * 620.f / Rate;
+				S = static_cast<int16>(FMath::Sin(PhaseA) * 7800.f * FMath::Clamp(1.f - (i / static_cast<float>(Samples)), 0.f, 1.f));
 				break;
 			case EAfterlightTempBed::Footstep:
 			{

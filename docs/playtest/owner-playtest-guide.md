@@ -55,6 +55,12 @@ Runtime is about **7–9 minutes** if you walk with Maya. Faster if you never li
 
 ## Greybox limits
 
-Manny/Quinn placeholders instead of final faces. Boxes instead of rooms. Placeholder rain/hum, no human voices. Subtitles stand in for speech. This is still a cinematic demo, not the finished film.
+Manny/Quinn placeholders instead of final faces. Boxes instead of rooms. Placeholder rain/hum. Temporary owner-recorded WAV files can be dropped in `Content/Audio/VO/Temp/Eli` and `.../Maya`. Missing files stay subtitle-only. This is still a cinematic demo, not the finished film.
 
-Other commands: `.\afterlight.ps1 build` · `test` · `smoke` · `verify` · `all`.
+Other commands: `.\afterlight.ps1 play` · `play-safe` · `qa` · `qa-story` · `qa-question` · `build` · `test` · `smoke` · `verify` · `all`.
+
+- `play` is the normal owner launch. No screenshot queue. No auto-walk.
+- `play-safe` is the same slice with the editor minimized during PIE, for a full-slice run on this laptop.
+- `qa` is a standalone rendered capture pass. It writes Unreal-native frames to `Saved/QA/Sprint03/`. Do not use it as the everyday play command.
+- `qa-story` is the same rendered path at human dialogue pacing. Auto-selects Walk.
+- `qa-question` is the human-paced path on the Question branch.

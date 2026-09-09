@@ -35,6 +35,7 @@ public:
 	void Interact();
 	void SetMoveEnabled(bool bEnabled);
 	void SetLookEnabled(bool bEnabled);
+	void FaceToward(const FVector& WorldLocation, float HoldSeconds);
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "Afterlight")
@@ -75,4 +76,7 @@ protected:
 
 	bool bMoveEnabled = true;
 	bool bLookEnabled = true;
+	FVector FaceTarget = FVector::ZeroVector;
+	float FaceHold = 0.f;
+	float StepTimer = 0.f;
 };

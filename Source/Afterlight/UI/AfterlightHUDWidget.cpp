@@ -61,7 +61,7 @@ TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 		Dialogue->SetAutoWrapText(true);
 		if (UCanvasPanelSlot* DialogueSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Dialogue))
 		{
-			DialogueSlot->SetAnchors(FAnchors(0.5f, 0.66f));
+			DialogueSlot->SetAnchors(FAnchors(0.5f, 0.68f));
 			DialogueSlot->SetAlignment(FVector2D(0.5f, 1.f));
 			DialogueSlot->SetSize(FVector2D(760.f, 96.f));
 		}
@@ -69,10 +69,10 @@ TSharedRef<SWidget> UAfterlightHUDWidget::RebuildWidget()
 	}
 	if (!ChoiceBlock.IsValid())
 	{
-		UTextBlock* Choices = MakeText(TEXT("Choices"), FLinearColor(0.96f, 0.93f, 0.86f), 22);
+		UTextBlock* Choices = MakeText(TEXT("Choices"), FLinearColor(0.93f, 0.9f, 0.82f), 20);
 		if (UCanvasPanelSlot* ChoiceSlot = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Choices))
 		{
-			ChoiceSlot->SetAnchors(FAnchors(0.5f, 0.74f));
+			ChoiceSlot->SetAnchors(FAnchors(0.5f, 0.78f));
 			ChoiceSlot->SetAlignment(FVector2D(0.5f, 0.f));
 			ChoiceSlot->SetAutoSize(true);
 		}
@@ -181,6 +181,16 @@ void UAfterlightHUDWidget::SetPrompt(const FText& Text)
 void UAfterlightHUDWidget::SetDialogue(FName SpeakerId, const FText& Line, const TArray<FText>& Choices)
 {
 	bDialogueVisible = true;
+	DialogueTarget = 1.f;
+	if (SpeakerId != LastSpeakerId)
+	{
+		DialogueOpacity = 0.12f;
+		LastSpeakerId = SpeakerId;
+	}
+	else
+	{
+		DialogueOpacity = FMath::Max(DialogueOpacity, 0.35f);
+	}
 	if (DialogueBlock.IsValid())
 	{
 		const FString Body = SpeakerId.IsNone() || SpeakerId == TEXT("Recording") || Choices.Num() > 0
@@ -188,11 +198,23 @@ void UAfterlightHUDWidget::SetDialogue(FName SpeakerId, const FText& Line, const
 			: FString::Printf(TEXT("%s\n%s"), *SpeakerId.ToString(), *Line.ToString());
 		DialogueBlock->SetText(FText::FromString(Body));
 		DialogueBlock->SetVisibility(ESlateVisibility::HitTestInvisible);
+		DialogueBlock->SetRenderOpacity(DialogueOpacity);
 	}
 	if (ChoiceBlock.IsValid())
 	{
 		ChoiceBlock->SetText(FText::FromString(FAfterlightPresentationFormat::FormatChoiceList(Choices)));
-		ChoiceBlock->SetVisibility(Choices.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+		ChoiceTarget = Choices.Num() > 0 ? 1.f : 0.f;
+		if (Choices.Num() > 0)
+		{
+			ChoiceOpacity = 0.08f;
+			ChoiceBlock->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			ChoiceOpacity = 0.f;
+			ChoiceBlock->SetVisibility(ESlateVisibility::Hidden);
+		}
+		ChoiceBlock->SetRenderOpacity(ChoiceOpacity);
 	}
 	if (PromptBlock.IsValid())
 	{
@@ -207,14 +229,9 @@ void UAfterlightHUDWidget::SetDialogue(FName SpeakerId, const FText& Line, const
 void UAfterlightHUDWidget::HideDialogue()
 {
 	bDialogueVisible = false;
-	if (DialogueBlock.IsValid())
-	{
-		DialogueBlock->SetVisibility(ESlateVisibility::Hidden);
-	}
-	if (ChoiceBlock.IsValid())
-	{
-		ChoiceBlock->SetVisibility(ESlateVisibility::Hidden);
-	}
+	DialogueTarget = 0.f;
+	ChoiceTarget = 0.f;
+	LastSpeakerId = NAME_None;
 }
 
 void UAfterlightHUDWidget::SetDebugText(const FText& Text)
@@ -353,6 +370,24 @@ FReply UAfterlightHUDWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 void UAfterlightHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+	DialogueOpacity = FMath::FInterpTo(DialogueOpacity, DialogueTarget, InDeltaTime, DialogueTarget > 0.5f ? 7.5f : 5.5f);
+	ChoiceOpacity = FMath::FInterpTo(ChoiceOpacity, ChoiceTarget, InDeltaTime, 6.2f);
+	if (DialogueBlock.IsValid())
+	{
+		DialogueBlock->SetRenderOpacity(DialogueOpacity);
+		if (!bDialogueVisible && DialogueOpacity < 0.05f)
+		{
+			DialogueBlock->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
+	if (ChoiceBlock.IsValid())
+	{
+		ChoiceBlock->SetRenderOpacity(ChoiceOpacity);
+		if (ChoiceTarget <= 0.f && ChoiceOpacity < 0.05f)
+		{
+			ChoiceBlock->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
 	if (bHoldCard && !HasKeyboardFocus())
 	{
 		SetKeyboardFocus();

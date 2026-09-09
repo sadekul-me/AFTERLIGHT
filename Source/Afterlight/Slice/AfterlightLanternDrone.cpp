@@ -30,7 +30,7 @@ namespace
 		Part->SetRelativeRotation(Rotation);
 		Part->SetRelativeScale3D(Scale);
 		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Part->SetCastShadow(true);
+		Part->SetCastShadow(false);
 		if (Mid)
 		{
 			Part->SetMaterial(0, Mid);
@@ -52,10 +52,10 @@ AAfterlightLanternDrone::AAfterlightLanternDrone()
 	Spotlight->SetupAttachment(Body);
 	Spotlight->SetRelativeLocation(FVector(28.f, 0.f, -10.f));
 	Spotlight->SetRelativeRotation(FRotator(-58.f, 0.f, 0.f));
-	Spotlight->SetIntensity(9000.f);
+	Spotlight->SetIntensity(4200.f);
 	Spotlight->SetInnerConeAngle(14.f);
-	Spotlight->SetOuterConeAngle(34.f);
-	Spotlight->SetAttenuationRadius(900.f);
+	Spotlight->SetOuterConeAngle(32.f);
+	Spotlight->SetAttenuationRadius(720.f);
 	Spotlight->SetLightColor(FLinearColor(0.55f, 0.92f, 1.f));
 	Spotlight->SetCastShadows(false);
 
@@ -106,7 +106,7 @@ void AAfterlightLanternDrone::BeginPlay()
 		MakeDronePart(this, Body, TEXT("Lens"), Cone, FVector(36.f, 0.f, -10.f), FRotator(-80.f, 0.f, 0.f), FVector(0.28f, 0.28f, 0.34f), Lens);
 		if (Spotlight)
 		{
-			ScanBeam = MakeDronePart(this, Spotlight, TEXT("ScanBeam"), Cone, FVector(70.f, 0.f, 0.f), FRotator(90.f, 0.f, 0.f), FVector(0.28f, 0.28f, 2.4f), Beam);
+			ScanBeam = MakeDronePart(this, Spotlight, TEXT("ScanBeam"), Cone, FVector(80.f, 0.f, 0.f), FRotator(90.f, 0.f, 0.f), FVector(0.4f, 0.4f, 2.9f), Beam);
 			if (ScanBeam)
 			{
 				ScanBeam->SetCastShadow(false);
@@ -129,8 +129,23 @@ void AAfterlightLanternDrone::BeginSweep(const FVector& Start, const FVector& En
 	SweepElapsed = 0.f;
 	bSweeping = true;
 	bFinished = false;
-	SetActorLocation(Start);
+	SetActorTickEnabled(true);
 	SetActorHiddenInGame(false);
+	SetActorLocation(Start);
+	if (Spotlight)
+	{
+		Spotlight->SetVisibility(true);
+		Spotlight->SetIntensity(4200.f);
+	}
+	if (Beacon)
+	{
+		Beacon->SetVisibility(true);
+		Beacon->SetIntensity(18.f);
+	}
+	if (ScanBeam)
+	{
+		ScanBeam->SetVisibility(true);
+	}
 }
 
 void AAfterlightLanternDrone::ResetSweep()
@@ -139,6 +154,21 @@ void AAfterlightLanternDrone::ResetSweep()
 	bFinished = false;
 	SweepElapsed = 0.f;
 	SetActorHiddenInGame(true);
+	SetActorTickEnabled(false);
+	if (Spotlight)
+	{
+		Spotlight->SetIntensity(0.f);
+		Spotlight->SetVisibility(false);
+	}
+	if (Beacon)
+	{
+		Beacon->SetIntensity(0.f);
+		Beacon->SetVisibility(false);
+	}
+	if (ScanBeam)
+	{
+		ScanBeam->SetVisibility(false);
+	}
 }
 
 void AAfterlightLanternDrone::Tick(float DeltaSeconds)

@@ -332,6 +332,8 @@ bool FAfterlightCameraShotValidityTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Valid placement needs height and distance"), FAfterlightSliceProgress::IsShotValidPlacement(FVector(520.f, 130.f, 168.f), FVector(780.f, 40.f, 168.f)));
 	TestFalse(TEXT("Inside-Maya placement is rejected"), FAfterlightSliceProgress::IsShotValidPlacement(FVector(748.f, 62.f, 166.f), FVector(780.f, 40.f, 168.f)));
 	TestTrue(TEXT("Playable clamp keeps Z on floor"), FMath::IsNearlyEqual(FAfterlightSliceProgress::ClampToPlayable(FVector(200.f, 0.f, -40.f)).Z, 92.f));
+	TestTrue(TEXT("Hide alcove stays inside playable XY"), FAfterlightSliceProgress::IsInsidePlayableXY(2420.f, 500.f));
+	TestTrue(TEXT("Hide alcove clamp keeps a walkable Y"), FAfterlightSliceProgress::ClampToPlayable(FVector(2420.f, 500.f, 92.f)).Y >= 310.f);
 	return true;
 }
 

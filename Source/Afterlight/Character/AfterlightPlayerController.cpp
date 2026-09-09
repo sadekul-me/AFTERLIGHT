@@ -24,6 +24,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Core/AfterlightLog.h"
+#include "Afterlight.h"
 
 AAfterlightPlayerController::AAfterlightPlayerController()
 {
@@ -194,6 +195,11 @@ void AAfterlightPlayerController::SetInputState(EAfterlightInputState NewState)
 	if (bEntryOrEnd)
 	{
 		ApplyHoldCardFocus();
+		if (AfterlightQaAutoEnabled())
+		{
+			bShowMouseCursor = false;
+			bEnableClickEvents = false;
+		}
 		return;
 	}
 	const bool bShowCursor = NewState == EAfterlightInputState::Constrained && !bCine;

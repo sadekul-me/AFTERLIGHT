@@ -14,9 +14,9 @@ AAfterlightCompanionCharacter::AAfterlightCompanionCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	GetCapsuleComponent()->InitCapsuleSize(40.f, 88.f);
-	GetCharacterMovement()->MaxWalkSpeed = 160.f;
+	GetCharacterMovement()->MaxWalkSpeed = 148.f;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->RotationRate = FRotator(0.f, 380.f, 0.f);
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 260.f, 0.f);
 	bUseControllerRotationYaw = false;
 
 	Interactable = CreateDefaultSubobject<UAfterlightInteractableComponent>(TEXT("Interactable"));
@@ -63,7 +63,7 @@ void AAfterlightCompanionCharacter::SetLeadPath(const TArray<FVector>& Points, b
 	PathIndex = 0;
 	bWaitForPlayer = bInWaitForPlayer;
 	bWaitingForPlayer = false;
-	PathPause = 0.55f;
+	PathPause = 0.72f;
 }
 
 void AAfterlightCompanionCharacter::ClearLeadPath()
@@ -92,7 +92,24 @@ void AAfterlightCompanionCharacter::SetPreferPlayerLook(bool bPreferPlayer)
 void AAfterlightCompanionCharacter::GlanceAt(const FVector& WorldLocation)
 {
 	GlanceLocation = WorldLocation;
-	GlanceHold = 2.2f;
+	GlanceHold = 2.8f;
+}
+
+void AAfterlightCompanionCharacter::HoldStill(float Seconds)
+{
+	PathPause = FMath::Max(PathPause, Seconds);
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+		Move->bOrientRotationToMovement = false;
+	}
+}
+
+void AAfterlightCompanionCharacter::FaceToward(const FVector& WorldLocation, float HoldSeconds)
+{
+	GlanceAt(WorldLocation);
+	GlanceHold = FMath::Max(GlanceHold, HoldSeconds);
+	HoldStill(0.28f);
 }
 
 bool AAfterlightCompanionCharacter::HasReachedPathEnd() const
@@ -151,7 +168,7 @@ void AAfterlightCompanionCharacter::UpdatePath(float DeltaSeconds)
 	if (To.SizeSquared2D() < 80.f * 80.f)
 	{
 		++PathIndex;
-		PathPause = 0.42f;
+		PathPause = 0.58f;
 		if (WorldLookTargets.Num() > 0)
 		{
 			GlanceAt(WorldLookTargets[PresenceLookIndex % WorldLookTargets.Num()]);
@@ -177,9 +194,10 @@ void AAfterlightCompanionCharacter::UpdatePresence(float DeltaSeconds)
 	{
 		return;
 	}
-	PresenceTimer = bPreferPlayerLook ? 3.4f : 4.6f;
+	PresenceTimer = bPreferPlayerLook ? 3.8f : 2.6f;
 	APawn* Protagonist = ResolveProtagonist();
-	const bool bUsePlayer = Protagonist && (bWaitingForPlayer || bInDialogue || (bPreferPlayerLook && (PresenceLookIndex % 3) != 2));
+	const bool bLookAway = !bPreferPlayerLook && ((PresenceLookIndex % 3) != 0);
+	const bool bUsePlayer = Protagonist && !bLookAway && (bWaitingForPlayer || bInDialogue || (bPreferPlayerLook && (PresenceLookIndex % 3) != 2));
 	if (bUsePlayer)
 	{
 		GlanceAt(Protagonist->GetActorLocation() + FVector(0.f, 0.f, 70.f));
@@ -225,7 +243,7 @@ void AAfterlightCompanionCharacter::UpdateFacing(float DeltaSeconds)
 		return;
 	}
 	const FRotator Target = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), LookAt);
-	const FRotator NewRot = FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Target.Yaw, 0.f), DeltaSeconds, 2.4f);
+	const FRotator NewRot = FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Target.Yaw, 0.f), DeltaSeconds, 1.65f);
 	SetActorRotation(NewRot);
 }
 
@@ -255,6 +273,11 @@ void AAfterlightCompanionCharacter::ExecuteInteraction(AActor* Interactor)
 void AAfterlightCompanionCharacter::NotifyDialogueStarted()
 {
 	bInDialogue = true;
+	HoldStill(0.38f);
+	if (APawn* Protagonist = ResolveProtagonist())
+	{
+		GlanceAt(Protagonist->GetActorLocation() + FVector(0.f, 0.f, 70.f));
+	}
 }
 
 void AAfterlightCompanionCharacter::NotifyDialogueEnded()

@@ -38,6 +38,8 @@ public:
 	void SetWorldLookTargets(const TArray<FVector>& Points);
 	void SetPreferPlayerLook(bool bPreferPlayer);
 	void GlanceAt(const FVector& WorldLocation);
+	void HoldStill(float Seconds);
+	void FaceToward(const FVector& WorldLocation, float HoldSeconds);
 	bool HasReachedPathEnd() const;
 	bool IsWaitingForPlayer() const { return bWaitingForPlayer; }
 

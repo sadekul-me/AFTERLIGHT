@@ -8,6 +8,7 @@
 #include "Engine/Engine.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformMemory.h"
 #include "Misc/Paths.h"
 #include "UnrealClient.h"
 #include "Templates/Function.h"
@@ -198,6 +199,18 @@ static TAutoConsoleVariable<int32> CVarAfterlightQaDrive(
 	TEXT("If 1, walk the owner-play route and pick the first choice for unattended QA."),
 	ECVF_Default);
 
+static TAutoConsoleVariable<int32> CVarAfterlightQaStory(
+	TEXT("Afterlight.QaStory"),
+	0,
+	TEXT("If 1, keep authored dialogue holds and scene pauses for a human-paced QA run."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<int32> CVarAfterlightQaChoice(
+	TEXT("Afterlight.QaChoice"),
+	0,
+	TEXT("QA auto-choice index. 0 = Walk / Follow. 1 = You talk like I belong to you."),
+	ECVF_Default);
+
 bool AfterlightQaAutoEnabled()
 {
 	return CVarAfterlightQaAuto.GetValueOnAnyThread() != 0;
@@ -208,13 +221,40 @@ bool AfterlightQaDriveEnabled()
 	return CVarAfterlightQaDrive.GetValueOnAnyThread() != 0;
 }
 
+bool AfterlightQaStoryEnabled()
+{
+	return CVarAfterlightQaStory.GetValueOnAnyThread() != 0;
+}
+
+int32 AfterlightQaChoiceIndex()
+{
+	return FMath::Clamp(CVarAfterlightQaChoice.GetValueOnAnyThread(), 0, 1);
+}
+
+const TCHAR* AfterlightQaSprintFolder()
+{
+	return TEXT("Sprint03");
+}
+
+void AfterlightLogMem(const TCHAR* Label)
+{
+	const FPlatformMemoryStats Mem = FPlatformMemory::GetStats();
+	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_MEM %s usedPhys=%.2fGB availPhys=%.2fGB usedVirt=%.2fGB availVirt=%.2fGB"),
+		Label ? Label : TEXT("mark"),
+		Mem.UsedPhysical / (1024.0 * 1024.0 * 1024.0),
+		Mem.AvailablePhysical / (1024.0 * 1024.0 * 1024.0),
+		Mem.UsedVirtual / (1024.0 * 1024.0 * 1024.0),
+		Mem.AvailableVirtual / (1024.0 * 1024.0 * 1024.0));
+}
+
 void AfterlightCaptureQaShot(const TCHAR* Name)
 {
+	AfterlightLogMem(Name);
 	const FString ShotName = Name && *Name ? FString(Name) : FDateTime::Now().ToString(TEXT("HHmmss"));
-	const FString Dir = FPaths::ProjectSavedDir() / TEXT("QA");
+	const FString Dir = FPaths::ProjectSavedDir() / TEXT("QA") / AfterlightQaSprintFolder();
 	IFileManager::Get().MakeDirectory(*Dir, true);
 	const FString Path = FPaths::ConvertRelativePathToFull(Dir / (ShotName + TEXT(".png")));
-	FScreenshotRequest::RequestScreenshot(Path, false, false);
+	FScreenshotRequest::RequestScreenshot(Path, true, false);
 	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_QA_SHOT=%s"), *Path);
 }
 

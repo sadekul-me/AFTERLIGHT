@@ -142,6 +142,21 @@ void UAfterlightCameraSubsystem::ApplyViewTarget(AActor* Target, float BlendTime
 	CurrentViewTarget = Target;
 }
 
+void UAfterlightCameraSubsystem::ForceView(AActor* Target, float BlendTime)
+{
+	if (!Target)
+	{
+		return;
+	}
+	GetWorld()->GetTimerManager().ClearTimer(PushTimer);
+	PushActor.Reset();
+	ApplyViewTarget(Target, BlendTime, VTBlend_Linear);
+	if (Authority != EAfterlightCameraAuthority::Sequencer)
+	{
+		Authority = EAfterlightCameraAuthority::Register;
+	}
+}
+
 void UAfterlightCameraSubsystem::ApplyRecipeToActor(AActor* Target, const UAfterlightCameraRecipe* Recipe, AActor* FocusActor)
 {
 	if (!Target || !Recipe)

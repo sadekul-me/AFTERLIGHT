@@ -1,6 +1,6 @@
 # Vertical Slice Production Pass 1 — Greybox Implementation
 
-Later visual/performance work: `docs/implementation/autonomous-sprint-01.md`.
+Later visual/performance work: `docs/implementation/autonomous-sprint-01.md`. Full-slice rendered proof: `docs/implementation/autonomous-sprint-02.md`. Cinematic delivery: `docs/implementation/autonomous-sprint-03.md`.
 
 This is an implementation record. Story canon remains:
 

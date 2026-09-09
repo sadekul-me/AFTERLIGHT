@@ -12,6 +12,10 @@
 #include "Character/AfterlightPlaceholderVisuals.h"
 #include "Camera/AfterlightSliceProgress.h"
 #include "Engine/World.h"
+#include "Audio/AfterlightTempAudio.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 AAfterlightCharacter::AAfterlightCharacter()
 {
@@ -71,6 +75,27 @@ void AAfterlightCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	FAfterlightPlaceholderVisuals::Tick(this, DeltaSeconds);
+	if (FaceHold > 0.f)
+	{
+		FaceHold = FMath::Max(0.f, FaceHold - DeltaSeconds);
+		if (UCharacterMovementComponent* Move = GetCharacterMovement())
+		{
+			Move->bOrientRotationToMovement = FaceHold <= 0.f && bMoveEnabled;
+		}
+		const FRotator Target = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), FaceTarget);
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Target.Yaw, 0.f), DeltaSeconds, 2.1f));
+	}
+	if (!FParse::Param(FCommandLine::Get(), TEXT("AfterlightSliceSmoke"))
+		&& !FParse::Param(FCommandLine::Get(), TEXT("AfterlightSmoke"))
+		&& GetVelocity().SizeSquared2D() > 1600.f)
+	{
+		StepTimer -= DeltaSeconds;
+		if (StepTimer <= 0.f)
+		{
+			FAfterlightTempAudio::PlayOneShot(GetWorld(), this, EAfterlightTempBed::Footstep, 0.07f);
+			StepTimer = 0.44f;
+		}
+	}
 	if (!FollowCamera || !CameraBoom)
 	{
 		return;
@@ -152,6 +177,16 @@ void AAfterlightCharacter::SetMoveEnabled(bool bEnabled)
 void AAfterlightCharacter::SetLookEnabled(bool bEnabled)
 {
 	bLookEnabled = bEnabled;
+}
+
+void AAfterlightCharacter::FaceToward(const FVector& WorldLocation, float HoldSeconds)
+{
+	FaceTarget = WorldLocation;
+	FaceHold = FMath::Max(0.15f, HoldSeconds);
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->bOrientRotationToMovement = false;
+	}
 }
 
 void AAfterlightCharacter::ApplyExploreRecipe(const UAfterlightCameraRecipe* Recipe)

@@ -10,6 +10,7 @@
 #include "Camera/AfterlightCameraRecipe.h"
 #include "CineCameraActor.h"
 #include "CineCameraComponent.h"
+#include "CineCameraSettings.h"
 #include "Narrative/AfterlightDialogueAsset.h"
 #include "Narrative/AfterlightDialogueRunner.h"
 #include "Narrative/AfterlightNarrativeSubsystem.h"
@@ -21,6 +22,7 @@
 #include "UI/AfterlightPresentationSubsystem.h"
 #include "UI/AfterlightPresentationFormat.h"
 #include "Audio/AfterlightTempAudio.h"
+#include "Audio/AfterlightVoice.h"
 #include "Components/AudioComponent.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
@@ -228,11 +230,11 @@ void AAfterlightSlice01Director::Tick(float DeltaSeconds)
 	TryGrantEnteredCut();
 	MaybeStartCutTalk();
 
-	if (!bSmoke && AfterlightQaAutoEnabled())
+	if (!bSmoke)
 	{
 		FpsWindowSeconds += DeltaSeconds;
 		++FpsWindowFrames;
-		if (FpsWindowSeconds >= 2.5f)
+		if (FpsWindowSeconds >= 4.f)
 		{
 			UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_FPS=%.1f"), FpsWindowFrames / FpsWindowSeconds);
 			FpsWindowSeconds = 0.f;
@@ -242,10 +244,14 @@ void AAfterlightSlice01Director::Tick(float DeltaSeconds)
 
 	if (!bSmoke && AfterlightQaDriveEnabled() && !bAwaitingEntry && !bSliceEnded)
 	{
-		FVector Target = Maya->GetActorLocation();
-		if (bWarningStarted)
+		if (Narrative->HasFlag(AfterlightTags::Story_Slice01_SweepPassed) && !Narrative->HasFlag(AfterlightTags::Story_Slice01_ReachedBolt))
 		{
-			Target = TinLoc;
+			HideHintElapsed += DeltaSeconds;
+		}
+		FVector Target = Maya->GetActorLocation();
+		if (bTinStarted || bWarningStarted)
+		{
+			Target = Pawn->GetActorLocation();
 		}
 		else if (Narrative->HasFlag(AfterlightTags::Story_Slice01_QuietBeat) && !Narrative->HasFlag(AfterlightTags::Story_Slice01_FoundTin))
 		{
@@ -257,7 +263,19 @@ void AAfterlightSlice01Director::Tick(float DeltaSeconds)
 		}
 		else if (Narrative->HasFlag(AfterlightTags::Story_Slice01_SweepPassed))
 		{
-			Target = (Pawn->GetActorLocation().Y > 160.f) ? FVector(2500.f, 0.f, 92.f) : DoorLoc;
+			const FVector Loc = Pawn->GetActorLocation();
+			if (Loc.Y > 90.f)
+			{
+				Target = FVector(2480.f, 20.f, 92.f);
+			}
+			else if (Loc.X < 3040.f)
+			{
+				Target = FVector(2920.f, 16.f, 92.f);
+			}
+			else
+			{
+				Target = DoorLoc;
+			}
 		}
 		else if (bSweepStarted)
 		{
@@ -271,10 +289,15 @@ void AAfterlightSlice01Director::Tick(float DeltaSeconds)
 		Delta.Z = 0.f;
 		if (Delta.Size() > 48.f)
 		{
-			Pawn->AddMovementInput(Delta.GetSafeNormal(), 1.f);
+			Pawn->AddMovementInput(Delta.GetSafeNormal(), AfterlightQaStoryEnabled() ? 0.42f : 1.f);
 		}
-		else if (Narrative->HasFlag(AfterlightTags::Story_Slice01_SweepPassed) && !Narrative->HasFlag(AfterlightTags::Story_Slice01_ReachedBolt))
+		else if (Narrative->HasFlag(AfterlightTags::Story_Slice01_SweepPassed) && !Narrative->HasFlag(AfterlightTags::Story_Slice01_ReachedBolt)
+			&& (FVector::Dist2D(Pawn->GetActorLocation(), DoorLoc) < 220.f || (Pawn->GetActorLocation().X > 3260.f && FMath::Abs(Pawn->GetActorLocation().Y) < 140.f) || HideHintElapsed > 12.f))
 		{
+			if (HideHintElapsed > 12.f && FVector::Dist2D(Pawn->GetActorLocation(), DoorLoc) > 220.f)
+			{
+				Pawn->TeleportTo(DoorLoc + FVector(-90.f, 0.f, 0.f), Pawn->GetActorRotation(), false, true);
+			}
 			HandleDoor(Pawn);
 		}
 		else if (Narrative->HasFlag(AfterlightTags::Story_Slice01_QuietBeat) && !Narrative->HasFlag(AfterlightTags::Story_Slice01_FoundTin) && FVector::Dist2D(Pawn->GetActorLocation(), TinLoc) < 180.f)
@@ -294,9 +317,23 @@ void AAfterlightSlice01Director::Tick(float DeltaSeconds)
 		}
 	}
 
-	if (!bSweepStarted && Narrative->HasFlag(AfterlightTags::Story_Slice01_EnteredCut) && Pawn->GetActorLocation().X > 2040.f)
+	if (!bSweepStarted && Narrative->HasFlag(AfterlightTags::Story_Slice01_EnteredCut))
 	{
-		BeginSweep();
+		SweepFailElapsed += DeltaSeconds;
+		if (Pawn->GetActorLocation().X > 1980.f
+			|| (AfterlightQaDriveEnabled() && SweepFailElapsed > 7.f)
+			|| SweepFailElapsed > 28.f)
+		{
+			if (AfterlightQaDriveEnabled() && Pawn->GetActorLocation().X < 1980.f)
+			{
+				Pawn->TeleportTo(FVector(2120.f, 20.f, 92.f), Pawn->GetActorRotation(), false, true);
+				if (Maya)
+				{
+					Maya->SetActorLocation(HideLoc);
+				}
+			}
+			BeginSweep();
+		}
 	}
 
 	if (!Narrative->HasFlag(AfterlightTags::Story_Slice01_SweepPassed) && Pawn->GetActorLocation().X > 3280.f)
@@ -443,57 +480,69 @@ void AAfterlightSlice01Director::AimShot(ACineCameraActor* Camera, const FVector
 	Camera->SetActorRotation(UKismetMathLibrary::FindLookAtRotation(Location, LookAt));
 }
 
-void AAfterlightSlice01Director::RebuildContactShots()
+void AAfterlightSlice01Director::HoldShot(ACineCameraActor* Camera, float Blend)
 {
-	APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
-	if (!Pawn || !Maya)
+	if (!Camera)
 	{
 		return;
 	}
-	const FVector MayaLoc = Maya->GetActorLocation();
-	const FVector MayaHead = MayaLoc + FVector(0.f, 0.f, 76.f);
-	const FVector PlayerLoc = Pawn->GetActorLocation();
-	FVector Forward = MayaLoc - PlayerLoc;
-	Forward.Z = 0.f;
-	if (!Forward.Normalize())
+	if (UCineCameraComponent* Cine = Camera->GetCineCameraComponent())
 	{
-		Forward = FVector(1.f, 0.f, 0.f);
+		Cine->CurrentFocalLength = 18.f;
+		Cine->CurrentAperture = 4.5f;
+		Cine->Filmback.SensorWidth = 24.89f;
+		Cine->Filmback.SensorHeight = 14.f;
+		Cine->FocusSettings.FocusMethod = ECameraFocusMethod::DoNotOverride;
 	}
-	FVector Right = FVector::CrossProduct(FVector::UpVector, Forward);
-	if (!Right.Normalize())
+	if (UAfterlightCameraSubsystem* CameraSys = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Right = FVector(0.f, 1.f, 0.f);
+		CameraSys->ForceView(Camera, Blend);
 	}
-	const FVector Mid = (MayaLoc + PlayerLoc) * 0.5f + FVector(0.f, 0.f, 48.f);
-	auto KeepInside = [](FVector Loc)
+	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 	{
-		Loc.Y = FMath::Clamp(Loc.Y, -420.f, 420.f);
-		Loc.Z = FMath::Max(Loc.Z, 96.f);
-		return Loc;
-	};
-	AimShot(ContactOTS, KeepInside(PlayerLoc - Forward * 210.f + Right * 86.f + FVector(0.f, 0.f, 86.f)), MayaHead);
-	AimShot(ContactTwoShot, KeepInside(Mid + FVector(-10.f, 240.f, 72.f)), Mid + FVector(70.f, -20.f, 22.f));
-	AimShot(ContactClose, KeepInside(MayaHead + FVector(-20.f, 96.f, 6.f)), MayaHead + FVector(16.f, -8.f, 2.f));
-	AimShot(ContactPlayerOTS, KeepInside(MayaLoc + Forward * 190.f - Right * 72.f + FVector(0.f, 0.f, 84.f)), PlayerLoc + FVector(0.f, 0.f, 72.f));
+		PC->SetViewTargetWithBlend(Camera, Blend);
+	}
+}
+
+void AAfterlightSlice01Director::PlayTempVoice(FName SpeakerId, FName VoiceId)
+{
+	LastVoiceSeconds = 0.f;
+	if (bSmoke || VoiceId.IsNone())
+	{
+		return;
+	}
+	LastVoiceSeconds = FAfterlightVoice::Play(GetWorld(), this, SpeakerId, VoiceId);
+}
+
+void AAfterlightSlice01Director::RebuildContactShots()
+{
+	AimShot(ContactTwoShot, FVector(760.f, 305.f, 152.f), FVector(790.f, 18.f, 100.f));
+	AimShot(ContactOTS, FVector(560.f, 220.f, 150.f), MayaContactLoc + FVector(40.f, -20.f, 72.f));
+	AimShot(ContactClose, FVector(620.f, 240.f, 148.f), MayaContactLoc + FVector(30.f, -10.f, 68.f));
+	AimShot(ContactPlayerOTS, FVector(980.f, 230.f, 150.f), FVector(680.f, 30.f, 78.f));
 }
 
 void AAfterlightSlice01Director::RebuildQuietShot()
 {
-	if (!Maya)
-	{
-		return;
-	}
-	const FVector MayaHead = Maya->GetActorLocation() + FVector(0.f, 0.f, 76.f);
-	const FVector Look = MugLoc + FVector(0.f, 0.f, 40.f);
-	AimShot(ContactClose, MayaHead + FVector(-180.f, ChoseFollow() ? 70.f : 110.f, 8.f), Look);
+	const FVector MayaLoc = Maya ? Maya->GetActorLocation() : (MugLoc + FVector(ChoseFollow() ? 90.f : 180.f, ChoseFollow() ? 70.f : 130.f, 0.f));
+	AimShot(ContactTwoShot, MugLoc + FVector(-80.f, ChoseFollow() ? -280.f : -320.f, 120.f), MugLoc + FVector(20.f, 20.f, 48.f));
+	AimShot(ContactOTS, MugLoc + FVector(-280.f, -40.f, 160.f), MugLoc + FVector(70.f, 50.f, 40.f));
+	AimShot(ContactClose, MayaLoc + FVector(-140.f, ChoseFollow() ? -160.f : -200.f, 90.f), MayaLoc + FVector(8.f, 4.f, 50.f));
 }
 
 void AAfterlightSlice01Director::RebuildThreatShot()
 {
-	const FVector DroneLoc = Drone ? Drone->GetActorLocation() : FVector(1980.f, -40.f, 200.f);
-	const FVector Cam = DroneLoc + FVector(70.f, 130.f, -8.f);
-	const FVector Look = DroneLoc + FVector(-10.f, -8.f, -36.f);
-	AimShot(ThreatShot, Cam, Look);
+	AimShot(ThreatShot, FVector(2480.f, 545.f, 158.f), FVector(2100.f, 30.f, 140.f));
+}
+
+void AAfterlightSlice01Director::RebuildTinShot()
+{
+	AimShot(ThreatShot, FVector(3680.f, -270.f, 148.f), FVector(3948.f, -120.f, 56.f));
+}
+
+void AAfterlightSlice01Director::RebuildWarningReactionShot()
+{
+	AimShot(ContactClose, FVector(3820.f, 160.f, 150.f), FVector(3940.f, -80.f, 108.f));
 }
 
 void AAfterlightSlice01Director::TryGrantEnteredCut()
@@ -573,7 +622,7 @@ void AAfterlightSlice01Director::BuildWorld()
 	{
 		if (UExponentialHeightFogComponent* Comp = Fog->GetComponent())
 		{
-			Comp->SetFogDensity(0.012f);
+			Comp->SetFogDensity(0.0085f);
 			Comp->SetFogHeightFalloff(0.06f);
 			Comp->SetFogInscatteringColor(FLinearColor(0.14f, 0.13f, 0.12f));
 			Comp->SetVolumetricFog(false);
@@ -632,8 +681,30 @@ void AAfterlightSlice01Director::BuildWorld()
 		SpawnPrim(World, Cylinder, FVector(780.f, -340.f, 70.f), FRotator(0.f, 0.f, 90.f), FVector(0.14f, 0.14f, 2.2f), ColMetal, false);
 		SpawnPrim(World, Cylinder, FVector(780.f, -340.f, 110.f), FRotator(0.f, 0.f, 90.f), FVector(0.1f, 0.1f, 2.4f), ColBeam, false);
 	}
-	SpawnWorldSign(World, FVector(760.f, -350.f, 168.f), FRotator(0.f, 90.f, 0.f), TEXT("UD-9  CREW"), 14.f, FColor(220, 160, 70));
-	SpawnWorldSign(World, FVector(760.f, -350.f, 148.f), FRotator(0.f, 90.f, 0.f), TEXT("ROUTE OPEN"), 10.f, FColor(180, 120, 50));
+	SpawnPrim(World, Cube, FVector(780.f, -348.f, 130.f), FRotator::ZeroRotator, FVector(3.4f, 0.1f, 2.2f), ColConcrete, false);
+	SpawnPrim(World, Cube, FVector(760.f, -168.f, 120.f), FRotator::ZeroRotator, FVector(2.8f, 0.08f, 2.0f), ColPanel, false);
+	SpawnPrim(World, Cube, FVector(760.f, -164.f, 168.f), FRotator::ZeroRotator, FVector(2.4f, 0.04f, 0.05f), ColAmber, false);
+	SpawnPrim(World, Cube, FVector(640.f, -330.f, 70.f), FRotator::ZeroRotator, FVector(0.16f, 0.16f, 1.4f), ColMetal, false);
+	SpawnPrim(World, Cube, FVector(920.f, -330.f, 70.f), FRotator::ZeroRotator, FVector(0.16f, 0.16f, 1.4f), ColMetal, false);
+	SpawnWorldSign(World, FVector(760.f, -338.f, 168.f), FRotator(0.f, 90.f, 0.f), TEXT("UD-9  CREW"), 14.f, FColor(220, 160, 70));
+	SpawnWorldSign(World, FVector(760.f, -338.f, 148.f), FRotator(0.f, 90.f, 0.f), TEXT("ROUTE OPEN"), 10.f, FColor(180, 120, 50));
+	SpawnPrim(World, Cube, FVector(788.f, -86.f, 168.f), FRotator::ZeroRotator, FVector(6.4f, 0.16f, 3.6f), ColPanel, false);
+	SpawnPrim(World, Cube, FVector(788.f, 40.f, 248.f), FRotator::ZeroRotator, FVector(6.4f, 3.2f, 0.12f), ColMetal, false);
+	SpawnPrim(World, Cube, FVector(788.f, -80.f, 214.f), FRotator::ZeroRotator, FVector(6.0f, 0.05f, 0.07f), ColAmber, false);
+	SpawnPrim(World, Cube, FVector(788.f, -80.f, 76.f), FRotator::ZeroRotator, FVector(6.0f, 0.05f, 0.05f), ColAmber, false);
+	SpawnPrim(World, Cube, FVector(640.f, -78.f, 120.f), FRotator::ZeroRotator, FVector(0.12f, 0.18f, 2.1f), ColMetal, false);
+	SpawnPrim(World, Cube, FVector(940.f, -78.f, 120.f), FRotator::ZeroRotator, FVector(0.12f, 0.18f, 2.1f), ColMetal, false);
+	SpawnPrim(World, Cube, FVector(1020.f, -40.f, 128.f), FRotator::ZeroRotator, FVector(1.8f, 0.1f, 2.2f), ColConcrete, false);
+	if (Cylinder)
+	{
+		SpawnPrim(World, Cylinder, FVector(720.f, -62.f, 68.f), FRotator(0.f, 0.f, 90.f), FVector(0.12f, 0.12f, 2.6f), ColMetal, false);
+		SpawnPrim(World, Cylinder, FVector(860.f, -58.f, 108.f), FRotator(0.f, 0.f, 90.f), FVector(0.08f, 0.08f, 2.2f), ColBeam, false);
+	}
+	SpawnWorldSign(World, FVector(788.f, -76.f, 172.f), FRotator(0.f, 90.f, 0.f), TEXT("UNDERDECK 9"), 16.f, FColor(230, 170, 80));
+	SpawnWorldSign(World, FVector(788.f, -76.f, 152.f), FRotator(0.f, 90.f, 0.f), TEXT("SERVICE  UD-9"), 11.f, FColor(190, 140, 70));
+	SpawnLight(FVector(788.f, -36.f, 176.f), FLinearColor(1.f, 0.8f, 0.52f), 22.f, 820.f);
+	SpawnLight(FVector(760.f, 90.f, 148.f), FLinearColor(1.f, 0.84f, 0.6f), 11.f, 560.f);
+	SpawnLight(FVector(790.f, 200.f, 170.f), FLinearColor(1.f, 0.78f, 0.5f), 7.f, 480.f);
 
 	SpawnPrim(World, Cube, FVector(1480.f, 0.f, 3.f), FRotator::ZeroRotator, FVector(2.2f, 0.28f, 0.04f), ColAmber, false);
 	SpawnPrim(World, Cube, FVector(1520.f, 0.f, 3.f), FRotator::ZeroRotator, FVector(2.2f, 0.28f, 0.04f), ColCyan, false);
@@ -661,7 +732,9 @@ void AAfterlightSlice01Director::BuildWorld()
 	SpawnPrim(World, Cube, FVector(2420.f, 600.f, 160.f), FRotator::ZeroRotator, FVector(3.4f, 0.28f, 4.2f), ColHelion);
 	SpawnPrim(World, Cube, FVector(2260.f, 520.f, 160.f), FRotator::ZeroRotator, FVector(0.28f, 2.f, 4.2f), ColHelion);
 	SpawnPrim(World, Cube, FVector(2580.f, 520.f, 160.f), FRotator::ZeroRotator, FVector(0.28f, 2.f, 4.2f), ColHelion);
-	SpawnPrim(World, Cube, FVector(2400.f, 220.f, 28.f), FRotator::ZeroRotator, FVector(1.4f, 1.1f, 1.1f), ColHelion);
+	SpawnPrim(World, Cube, FVector(2340.f, 380.f, 28.f), FRotator::ZeroRotator, FVector(1.1f, 0.8f, 1.0f), ColHelion);
+	SpawnPrim(World, Cube, FVector(2500.f, 80.f, 3.f), FRotator::ZeroRotator, FVector(2.8f, 0.22f, 0.04f), ColCyan, false);
+	SpawnPrim(World, Cube, FVector(2920.f, 0.f, 3.f), FRotator::ZeroRotator, FVector(3.6f, 0.16f, 0.03f), ColAmber, false);
 	SpawnPrim(World, Cube, FVector(2300.f, 0.f, 318.f), FRotator::ZeroRotator, FVector(16.8f, 8.6f, 0.16f), ColHelion);
 	SpawnHelionPost(World, FVector(1880.f, -250.f, 0.f));
 	SpawnHelionPost(World, FVector(2280.f, 250.f, 0.f));
@@ -678,9 +751,13 @@ void AAfterlightSlice01Director::BuildWorld()
 	SpawnPrim(World, Cube, FVector(4220.f, 0.f, 150.f), FRotator::ZeroRotator, FVector(0.35f, 8.2f, 3.8f), ColPumpWall);
 	SpawnPrim(World, Cube, FVector(3820.f, -420.f, 150.f), FRotator::ZeroRotator, FVector(8.4f, 0.28f, 3.8f), ColPumpWall);
 	SpawnPrim(World, Cube, FVector(3820.f, 420.f, 150.f), FRotator::ZeroRotator, FVector(8.4f, 0.28f, 3.8f), ColPumpWall);
-	SpawnPrim(World, Cube, FVector(3720.f, 90.f, 42.f), FRotator::ZeroRotator, FVector(1.6f, 0.7f, 0.42f), ColPanel);
-	SpawnPrim(World, Cube, FVector(3720.f, 40.f, 68.f), FRotator::ZeroRotator, FVector(0.12f, 0.12f, 0.16f), FLinearColor(0.35f, 0.18f, 0.1f), false);
+	SpawnPrim(World, Cube, FVector(3720.f, 90.f, 42.f), FRotator::ZeroRotator, FVector(1.8f, 0.82f, 0.42f), ColPanel);
+	SpawnPrim(World, Cube, FVector(3720.f, 40.f, 70.f), FRotator::ZeroRotator, FVector(0.16f, 0.16f, 0.2f), FLinearColor(0.42f, 0.22f, 0.1f), false);
+	SpawnPrim(World, Cube, FVector(3704.f, 40.f, 64.f), FRotator::ZeroRotator, FVector(0.22f, 0.22f, 0.04f), ColConcrete, false);
 	SpawnPrim(World, Cube, FVector(3860.f, 180.f, 70.f), FRotator::ZeroRotator, FVector(1.4f, 0.9f, 1.6f), ColMetal);
+	SpawnPrim(World, Cube, FVector(3820.f, 0.f, 248.f), FRotator::ZeroRotator, FVector(4.8f, 0.08f, 0.06f), ColAmber, false);
+	SpawnPrim(World, Cube, FVector(3960.f, -210.f, 70.f), FRotator::ZeroRotator, FVector(0.7f, 0.18f, 1.1f), ColPanel);
+	SpawnPrim(World, Cube, FVector(3960.f, -210.f, 128.f), FRotator::ZeroRotator, FVector(0.72f, 0.2f, 0.06f), ColAmber, false);
 	if (Cylinder)
 	{
 		SpawnPrim(World, Cylinder, FVector(3860.f, 180.f, 160.f), FRotator::ZeroRotator, FVector(0.35f, 0.35f, 0.9f), ColBeam, false);
@@ -699,15 +776,29 @@ void AAfterlightSlice01Director::BuildWorld()
 		SpawnPrim(World, Cylinder, FVector(4100.f, -200.f, 120.f), FRotator(0.f, 0.f, 90.f), FVector(0.12f, 0.12f, 2.6f), ColMetal, false);
 	}
 	SpawnPrim(World, Cube, FVector(3880.f, -220.f, 36.f), FRotator::ZeroRotator, FVector(1.2f, 0.4f, 0.36f), ColPanel);
+	SpawnPrim(World, Cube, FVector(3820.f, 0.f, 248.f), FRotator::ZeroRotator, FVector(6.8f, 0.16f, 0.12f), ColMetal, false);
+	SpawnPrim(World, Cube, FVector(3720.f, 40.f, 210.f), FRotator::ZeroRotator, FVector(1.8f, 0.08f, 0.05f), ColAmber, false);
+	SpawnPrim(World, Cube, FVector(3940.f, -210.f, 78.f), FRotator::ZeroRotator, FVector(0.08f, 1.1f, 1.6f), ColPanel);
+	SpawnPrim(World, Cube, FVector(3940.f, -210.f, 118.f), FRotator::ZeroRotator, FVector(0.42f, 1.05f, 0.06f), ColMetal, false);
+	SpawnPrim(World, Cube, FVector(3720.f, 40.f, 78.f), FRotator::ZeroRotator, FVector(0.22f, 0.22f, 0.08f), FLinearColor(0.18f, 0.12f, 0.08f), false);
+	if (Cylinder)
+	{
+		SpawnPrim(World, Cylinder, FVector(3780.f, 220.f, 40.f), FRotator::ZeroRotator, FVector(0.7f, 0.7f, 0.85f), ColMetal);
+		SpawnPrim(World, Cylinder, FVector(3780.f, 220.f, 130.f), FRotator::ZeroRotator, FVector(0.22f, 0.22f, 0.7f), ColBeam, false);
+	}
+	SpawnPrim(World, Cube, FVector(2500.f, 80.f, 3.f), FRotator::ZeroRotator, FVector(9.2f, 0.16f, 0.03f), ColAmber, false);
+	SpawnPrim(World, Cube, FVector(3360.f, -80.f, 208.f), FRotator::ZeroRotator, FVector(0.1f, 0.1f, 0.18f), ColCyan, false);
 
 	SpawnLight(FVector(520.f, 0.f, 190.f), FLinearColor(1.f, 0.8f, 0.56f), 18.f, 1600.f);
-	SpawnLight(FVector(760.f, -220.f, 168.f), FLinearColor(1.f, 0.76f, 0.48f), 10.f, 900.f);
+	SpawnLight(FVector(760.f, -220.f, 168.f), FLinearColor(1.f, 0.76f, 0.48f), 12.f, 980.f);
 	SpawnLight(FVector(1980.f, 0.f, 230.f), FLinearColor(0.55f, 0.84f, 1.f), 14.f, 1700.f);
 	SpawnLight(FVector(2420.f, 240.f, 180.f), FLinearColor(0.62f, 0.88f, 1.f), 6.5f, 700.f);
 	SpawnLight(FVector(3720.f, 0.f, 180.f), FLinearColor(1.f, 0.74f, 0.42f), 11.f, 1100.f);
-	WitnessLed = SpawnLight(FVector(3360.f, -80.f, 190.f), FLinearColor(0.55f, 0.9f, 1.f), 0.08f, 220.f);
+	WitnessLed = SpawnLight(FVector(3820.f, -20.f, 246.f), FLinearColor(0.55f, 0.9f, 1.f), 0.08f, 280.f);
+	WitnessCore = SpawnPrim(World, Cube, FVector(3820.f, -20.f, 254.f), FRotator::ZeroRotator, FVector(0.32f, 0.32f, 0.2f), ColCyan, false);
 	HatchLight = SpawnLight(FVector(3380.f, 0.f, 170.f), FLinearColor(1.f, 0.82f, 0.5f), 3.4f, 480.f);
 	TinLight = SpawnLight(FVector(3940.f, -150.f, 90.f), FLinearColor(1.f, 0.8f, 0.48f), 0.45f, 220.f);
+	SpawnLight(FVector(3720.f, 40.f, 140.f), FLinearColor(1.f, 0.7f, 0.38f), 4.2f, 360.f);
 
 	SpawnSign(FVector(240.f, -250.f, 150.f), FRotator(0.f, 180.f, 0.f), TEXT("UNDERDECK 9"), 18.f, FColor(230, 170, 80));
 	SpawnSign(FVector(240.f, -250.f, 128.f), FRotator(0.f, 180.f, 0.f), TEXT("SERVICE"), 12.f, FColor(190, 140, 70));
@@ -728,6 +819,8 @@ void AAfterlightSlice01Director::BuildWorld()
 		Looks.Add(HideLoc + FVector(0.f, 0.f, 40.f));
 		Looks.Add(DoorLoc + FVector(0.f, 0.f, 80.f));
 		Looks.Add(MugLoc + FVector(0.f, 0.f, 40.f));
+		Looks.Add(TinLoc + FVector(0.f, 0.f, 20.f));
+		Looks.Add(FVector(4018.f, -150.f, 110.f));
 		Maya->SetWorldLookTargets(Looks);
 		if (!bSmoke)
 		{
@@ -781,11 +874,26 @@ void AAfterlightSlice01Director::BuildWorld()
 			Comp->OnInteracted.AddDynamic(this, &AAfterlightSlice01Director::HandleTin);
 		}
 	}
-	SpawnSign(TinLoc + FVector(0.f, 0.f, 30.f), FRotator(0.f, 180.f, 0.f), TEXT("FOR WHEN IT TAKES"), 12.f, FColor(90, 80, 70));
+	SpawnSign(TinLoc + FVector(0.f, -8.f, 22.f), FRotator(0.f, 180.f, 0.f), TEXT("FOR WHEN IT TAKES"), 8.f, FColor(70, 62, 52));
 
 	SpawnBox(FVector(4024.f, -150.f, 108.f), FVector(0.12f, 0.72f, 0.95f), FLinearColor(0.04f, 0.05f, 0.05f));
 	WarningSlate = SpawnBox(FVector(4018.f, -150.f, 110.f), FVector(0.05f, 0.58f, 0.78f), FLinearColor(0.12f, 0.42f, 0.34f));
 	SpawnBox(FVector(4016.f, -150.f, 148.f), FVector(0.04f, 0.62f, 0.05f), FLinearColor(0.18f, 0.55f, 0.42f));
+	SpawnBox(FVector(4015.f, -168.f, 104.f), FVector(0.03f, 0.16f, 0.42f), FLinearColor(0.03f, 0.07f, 0.06f));
+	SpawnBox(FVector(4015.f, -168.f, 128.f), FVector(0.028f, 0.1f, 0.12f), FLinearColor(0.02f, 0.05f, 0.045f));
+	SlateSilhouette = SpawnBox(FVector(4016.2f, -150.f, 112.f), FVector(0.02f, 0.16f, 0.34f), FLinearColor(0.02f, 0.05f, 0.045f));
+	SpawnBox(FVector(4016.2f, -150.f, 132.f), FVector(0.018f, 0.09f, 0.1f), FLinearColor(0.02f, 0.04f, 0.04f));
+	SlateScan = SpawnBox(FVector(4016.4f, -150.f, 138.f), FVector(0.012f, 0.56f, 0.018f), FLinearColor(0.55f, 1.f, 0.78f));
+	SlateNoise = SpawnBox(FVector(4016.6f, -136.f, 118.f), FVector(0.01f, 0.12f, 0.62f), FLinearColor(0.08f, 0.22f, 0.16f));
+	if (SlateScan)
+	{
+		SlateScan->SetActorHiddenInGame(true);
+		SlateScan->SetActorEnableCollision(false);
+	}
+	if (SlateNoise)
+	{
+		SlateNoise->SetActorEnableCollision(false);
+	}
 	SlateLight = SpawnLight(FVector(4004.f, -150.f, 118.f), FLinearColor(0.45f, 0.95f, 0.72f), 2.8f, 260.f);
 
 	Drone = GetWorld()->SpawnActor<AAfterlightLanternDrone>(FVector(1750.f, -120.f, 240.f), FRotator::ZeroRotator);
@@ -810,7 +918,7 @@ void AAfterlightSlice01Director::BuildWorld()
 		Volume->Settings.bOverride_AutoExposureMethod = true;
 		Volume->Settings.AutoExposureMethod = AEM_Manual;
 		Volume->Settings.bOverride_AutoExposureBias = true;
-		Volume->Settings.AutoExposureBias = 1.55f;
+		Volume->Settings.AutoExposureBias = 1.72f;
 		Volume->Settings.bOverride_AutoExposureMinBrightness = true;
 		Volume->Settings.AutoExposureMinBrightness = 0.95f;
 		Volume->Settings.bOverride_AutoExposureMaxBrightness = true;
@@ -950,13 +1058,16 @@ bool AAfterlightSlice01Director::ChoseFollow() const
 	return false;
 }
 
-float AAfterlightSlice01Director::DialogueDelay(const FText& Line, float OverrideSeconds) const
+float AAfterlightSlice01Director::DialogueDelay(const FText& Line, float OverrideSeconds)
 {
 	if (bSmoke)
 	{
 		return 0.04f;
 	}
-	return FAfterlightPresentationFormat::SpokenHoldSeconds(Line, OverrideSeconds);
+	const float Spoken = LastVoiceSeconds > 0.08f
+		? LastVoiceSeconds + 0.38f
+		: FAfterlightPresentationFormat::SpokenHoldSeconds(Line, OverrideSeconds) + 0.22f;
+	return Spoken + (AfterlightQaStoryEnabled() ? 0.9f : 0.f);
 }
 
 void AAfterlightSlice01Director::BeginEntry()
@@ -1102,21 +1213,42 @@ void AAfterlightSlice01Director::UpdateWarningPresentation(float DeltaSeconds)
 		return;
 	}
 	WarningPresentElapsed += DeltaSeconds;
+	const bool bDropout = FMath::Fmod(WarningPresentElapsed, 4.3f) > 4.05f;
+	if (WarningSlate)
+	{
+		WarningSlate->SetActorHiddenInGame(bDropout);
+	}
+	if (SlateScan)
+	{
+		const float ScanZ = 148.f - FMath::Fmod(WarningPresentElapsed * 28.f, 72.f);
+		SlateScan->SetActorLocation(FVector(4016.4f, -150.f, ScanZ));
+		SlateScan->SetActorHiddenInGame(bDropout);
+	}
+	if (SlateNoise)
+	{
+		const float Jitter = FMath::Sin(WarningPresentElapsed * 37.f) * 8.f;
+		SlateNoise->SetActorLocation(FVector(4016.6f, -136.f + Jitter, 118.f));
+		SlateNoise->SetActorHiddenInGame(!bDropout && (FMath::Frac(WarningPresentElapsed * 9.f) > 0.18f));
+	}
 	if (SlateLight)
 	{
 		if (UPointLightComponent* Comp = SlateLight->FindComponentByClass<UPointLightComponent>())
 		{
-			const float Flicker = 0.35f + FMath::Abs(FMath::Sin(WarningPresentElapsed * 11.f)) * 1.6f
-				+ FMath::Abs(FMath::Sin(WarningPresentElapsed * 29.f)) * 0.45f;
+			const float Flicker = bDropout ? 0.08f : (0.28f + FMath::Abs(FMath::Sin(WarningPresentElapsed * 11.f)) * 1.8f
+				+ FMath::Abs(FMath::Sin(WarningPresentElapsed * 29.f)) * 0.55f);
 			Comp->SetIntensity(Flicker);
 		}
 	}
 	if (WarningCamera)
 	{
-		const FVector Target = FVector(3948.f, 20.f, 136.f);
-		const float Push = FAfterlightPresentationFormat::HideRecoveryAlpha(WarningPresentElapsed, 22.f) * 0.28f;
+		const FVector Target = FVector(3936.f, 28.f, 132.f);
+		const float Push = FAfterlightPresentationFormat::HideRecoveryAlpha(WarningPresentElapsed, 22.f) * 0.42f;
 		WarningCamera->SetActorLocation(FMath::Lerp(WarningCamStart, Target, Push));
-		WarningCamera->SetActorRotation(UKismetMathLibrary::FindLookAtRotation(WarningCamera->GetActorLocation(), FVector(3988.f, -110.f, 114.f)));
+		WarningCamera->SetActorRotation(UKismetMathLibrary::FindLookAtRotation(WarningCamera->GetActorLocation(), FVector(3992.f, -118.f, 112.f)));
+	}
+	if (Maya && FMath::Fmod(WarningPresentElapsed, 5.2f) < DeltaSeconds + 0.02f)
+	{
+		Maya->GlanceAt(FVector(4018.f, -150.f, 110.f));
 	}
 }
 
@@ -1132,25 +1264,34 @@ void AAfterlightSlice01Director::UpdateAudioBeds()
 	const bool bQuiet = bQuietStarted && !bWarningStarted;
 	if (RainBed)
 	{
-		RainBed->SetVolumeMultiplier(bInterior ? 0.02f : 0.08f);
+		RainBed->SetVolumeMultiplier(bInterior ? 0.018f : 0.11f);
 	}
 	if (HumBed)
 	{
-		HumBed->SetVolumeMultiplier(bInterior ? 0.02f : 0.08f);
+		float Hum = (X > 1500.f && X < 3350.f) ? 0.13f : 0.07f;
+		if (bInterior)
+		{
+			Hum = 0.02f;
+		}
+		HumBed->SetVolumeMultiplier(Hum);
 	}
 	if (PumpBed)
 	{
-		float Pump = bInterior ? 0.11f : 0.f;
+		float Pump = bInterior ? 0.12f : 0.f;
 		if (bQuiet)
 		{
-			Pump = 0.045f;
+			Pump = 0.028f;
+		}
+		if (bWarningStarted)
+		{
+			Pump = 0.02f;
 		}
 		PumpBed->SetVolumeMultiplier(Pump);
 	}
 	if (DroneBed)
 	{
 		const bool bDrone = Drone && Drone->IsSweeping();
-		DroneBed->SetVolumeMultiplier(bDrone ? 0.22f : 0.f);
+		DroneBed->SetVolumeMultiplier(bDrone ? 0.26f : 0.f);
 	}
 }
 
@@ -1161,6 +1302,7 @@ void AAfterlightSlice01Director::BeginWake()
 		UI->HideTitle();
 	}
 	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_WAKE_VISIBLE"));
+	AfterlightLogMem(TEXT("Wake"));
 	if (!bSmoke && AfterlightQaAutoEnabled())
 	{
 		GetWorldTimerManager().SetTimer(QaHandle, []()
@@ -1198,11 +1340,12 @@ void AAfterlightSlice01Director::BeginWake()
 	{
 		GetWorldTimerManager().SetTimer(EntryHandle, [this]()
 		{
+			PlayTempVoice(TEXT("Maya"), TEXT("Call"));
 			if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 			{
 				UI->ShowDialogue(TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Call", "Eli."), TArray<FText>());
 			}
-		}, 3.2f, false);
+		}, AfterlightQaStoryEnabled() ? 4.2f : 3.2f, false);
 	}
 	GetWorldTimerManager().SetTimer(WakeHandle, [this]()
 	{
@@ -1224,7 +1367,7 @@ void AAfterlightSlice01Director::BeginWake()
 		}
 		ApplyInputFull();
 		SetBeat(TEXT("Slice01.Contact"));
-	}, bSmoke ? 0.05f : 8.f, false);
+	}, bSmoke ? 0.05f : (AfterlightQaStoryEnabled() ? 11.f : 8.f), false);
 }
 
 void AAfterlightSlice01Director::BeginContact()
@@ -1243,23 +1386,36 @@ void AAfterlightSlice01Director::BeginContact()
 	}
 	if (Maya)
 	{
+		Maya->SetActorLocation(FVector(820.f, 16.f, 92.f));
 		Maya->NotifyDialogueStarted();
 		Maya->ClearLeadPath();
 		if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
 		{
-			Maya->GlanceAt(Pawn->GetActorLocation() + FVector(0.f, 0.f, 70.f));
+			if (AfterlightQaAutoEnabled() || FVector::Dist2D(Pawn->GetActorLocation(), MayaContactLoc) > 280.f)
+			{
+				Pawn->TeleportTo(FVector(690.f, 58.f, 92.f), FRotator(0.f, -20.f, 0.f), false, true);
+			}
+			Maya->FaceToward(Pawn->GetActorLocation() + FVector(0.f, 0.f, 70.f), 2.4f);
+			if (AAfterlightCharacter* Eli = Cast<AAfterlightCharacter>(Pawn))
+			{
+				Eli->FaceToward(Maya->GetActorLocation() + FVector(0.f, 0.f, 70.f), 2.6f);
+			}
 		}
 	}
 	RebuildContactShots();
+	AfterlightLogMem(TEXT("Contact"));
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
 		Camera->RequestShot(AfterlightShotIds::DialogueTwoShot, 0.85f);
 	}
+	HoldShot(ContactTwoShot, 0.55f);
 	if (!bSmoke && AfterlightQaAutoEnabled() && !bQaContactCaptured)
 	{
 		bQaContactCaptured = true;
-		GetWorldTimerManager().SetTimer(QaHandle, []()
+		GetWorldTimerManager().SetTimer(QaHandle, [this]()
 		{
+			RebuildContactShots();
+			HoldShot(ContactTwoShot, 0.f);
 			AfterlightCaptureQaShot(TEXT("Contact"));
 		}, 1.15f, false);
 	}
@@ -1282,44 +1438,87 @@ void AAfterlightSlice01Director::HandleLine(FName SpeakerId, const FText& Line)
 {
 	UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>();
 	UAfterlightDialogueRunner* Runner = Narrative ? Narrative->GetDialogueRunner() : nullptr;
+	const FAfterlightDialogueNode* Node = Runner ? Runner->GetCurrentNode() : nullptr;
+	const FName VoiceId = Node ? Node->NodeId : NAME_None;
+	PlayTempVoice(SpeakerId, VoiceId);
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
 		TArray<FText> Empty;
 		UI->ShowDialogue(SpeakerId, Line, Empty);
 	}
-	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+	if (Maya)
 	{
-		RebuildContactShots();
-		if (GraphKind == 1 && Runner && Runner->GetCurrentNode())
+		Maya->HoldStill(0.32f);
+		if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
 		{
-			const FName Id = Runner->GetCurrentNode()->NodeId;
-			if (Id == TEXT("Specific"))
+			if (SpeakerId == TEXT("Maya"))
 			{
-				Camera->RequestShot(AfterlightShotIds::DialogueOTSProtagonist, 0.6f);
-			}
-			else if (Id == TEXT("Name") || Id == TEXT("LongWay"))
-			{
-				Camera->RequestShot(AfterlightShotIds::DialogueCloseUpCompanion, 0.7f);
-				if (!bSmoke && AfterlightQaAutoEnabled() && !bQaMayaCuCaptured)
+				if (!ChoseFollow() && (VoiceId == TEXT("LongWay") || VoiceId == TEXT("QuestionLine") || VoiceId == TEXT("Stay")))
 				{
-					bQaMayaCuCaptured = true;
-					GetWorldTimerManager().SetTimer(QaHandleB, []()
-					{
-						AfterlightCaptureQaShot(TEXT("MayaCU"));
-					}, 0.9f, false);
+					Maya->GlanceAt(Pawn->GetActorLocation() + FVector(80.f, 120.f, 40.f));
+				}
+				else
+				{
+					Maya->FaceToward(Pawn->GetActorLocation() + FVector(0.f, 0.f, 70.f), 1.8f);
 				}
 			}
-			else
+			if (AAfterlightCharacter* Eli = Cast<AAfterlightCharacter>(Pawn))
 			{
-				Camera->RequestShot(AfterlightShotIds::DialogueTwoShot, 0.65f);
+				Eli->FaceToward(Maya->GetActorLocation() + FVector(0.f, 0.f, 70.f), SpeakerId == TEXT("Eli") ? 1.2f : 2.1f);
+			}
+		}
+		if (VoiceId == TEXT("Posts"))
+		{
+			Maya->GlanceAt(FVector(1980.f, -390.f, 210.f));
+		}
+		else if (VoiceId == TEXT("Drip") || VoiceId == TEXT("Tonight"))
+		{
+			Maya->GlanceAt(MugLoc + FVector(0.f, 0.f, 40.f));
+		}
+	}
+	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+	{
+		if (GraphKind == 3)
+		{
+			RebuildQuietShot();
+			HoldShot(ContactTwoShot, 0.45f);
+		}
+		else if (GraphKind == 1)
+		{
+			RebuildContactShots();
+			if (Node)
+			{
+				const FName Id = Node->NodeId;
+				if (Id == TEXT("Specific"))
+				{
+					Camera->RequestShot(AfterlightShotIds::DialogueOTSProtagonist, 0.6f);
+					HoldShot(ContactPlayerOTS, 0.45f);
+				}
+				else if (Id == TEXT("Name") || Id == TEXT("LongWay"))
+				{
+					Camera->RequestShot(AfterlightShotIds::DialogueCloseUpCompanion, 0.7f);
+					HoldShot(ContactClose, 0.5f);
+					if (!bSmoke && AfterlightQaAutoEnabled() && !bQaMayaCuCaptured)
+					{
+						bQaMayaCuCaptured = true;
+						GetWorldTimerManager().SetTimer(QaHandleB, []()
+						{
+							AfterlightCaptureQaShot(TEXT("MayaCU"));
+						}, 0.9f, false);
+					}
+				}
+				else
+				{
+					Camera->RequestShot(AfterlightShotIds::DialogueTwoShot, 0.65f);
+					HoldShot(ContactTwoShot, 0.4f);
+				}
 			}
 		}
 	}
-	if (!Runner || !Runner->GetCurrentNode())
+	if (!Node)
 	{
 		return;
 	}
-	const FAfterlightDialogueNode* Node = Runner->GetCurrentNode();
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
 		if (Node->bKeepGameplayInput)
@@ -1337,6 +1536,10 @@ void AAfterlightSlice01Director::HandleLine(FName SpeakerId, const FText& Line)
 		if (!bSmoke && GraphKind == 2 && Maya && Maya->IsWaitingForPlayer())
 		{
 			Delay += 0.85f;
+		}
+		if (!bSmoke && GraphKind == 3 && VoiceId == TEXT("Tonight"))
+		{
+			Delay += AfterlightQaStoryEnabled() ? 1.4f : 0.55f;
 		}
 		GetWorldTimerManager().SetTimer(DialogueAdvanceHandle, this, &AAfterlightSlice01Director::AdvanceDialogue, Delay, false);
 	}
@@ -1356,30 +1559,53 @@ void AAfterlightSlice01Director::HandleChoices(const TArray<FAfterlightDialogueC
 	{
 		return;
 	}
-	TArray<FText> Texts;
-	for (const FAfterlightDialogueChoice& Choice : Choices)
+	PendingChoices = Choices;
+	bChoicesVisible = false;
+	PendingChoiceSpeaker = NAME_None;
+	PendingChoiceLine = FText::GetEmpty();
+	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
-		Texts.Add(Choice.Text);
+		if (const FAfterlightDialogueNode* Node = Narrative->GetDialogueRunner()->GetCurrentNode())
+		{
+			PendingChoiceSpeaker = Node->SpeakerId;
+			PendingChoiceLine = Node->Line;
+		}
 	}
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
-		FName Speaker = NAME_None;
-		FText Line;
-		if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
-		{
-			if (const FAfterlightDialogueNode* Node = Narrative->GetDialogueRunner()->GetCurrentNode())
-			{
-				Speaker = Node->SpeakerId;
-				Line = Node->Line;
-			}
-		}
-		UI->ShowDialogue(Speaker, Line, Texts);
+		UI->ShowDialogue(PendingChoiceSpeaker, PendingChoiceLine, TArray<FText>());
 	}
+	RebuildContactShots();
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		RebuildContactShots();
 		Camera->RequestShot(AfterlightShotIds::DialogueTwoShot, 0.55f);
 	}
+	HoldShot(ContactTwoShot, 0.35f);
+	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
+	{
+		PC->SetInputState(EAfterlightInputState::Constrained);
+	}
+	const float Delay = bSmoke ? 0.02f : (AfterlightQaStoryEnabled() ? 1.7f : 1.05f);
+	GetWorldTimerManager().SetTimer(ChoiceRevealHandle, this, &AAfterlightSlice01Director::RevealChoices, Delay, false);
+}
+
+void AAfterlightSlice01Director::RevealChoices()
+{
+	if (PendingChoices.Num() == 0)
+	{
+		return;
+	}
+	TArray<FText> Texts;
+	for (const FAfterlightDialogueChoice& Choice : PendingChoices)
+	{
+		Texts.Add(Choice.Text);
+	}
+	bChoicesVisible = true;
+	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
+	{
+		UI->ShowDialogue(PendingChoiceSpeaker, PendingChoiceLine, Texts);
+	}
+	HoldShot(ContactTwoShot, 0.2f);
 	if (!bSmoke && AfterlightQaAutoEnabled() && !bQaChoiceCaptured)
 	{
 		bQaChoiceCaptured = true;
@@ -1390,19 +1616,17 @@ void AAfterlightSlice01Director::HandleChoices(const TArray<FAfterlightDialogueC
 			{
 				if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 				{
-					Narrative->GetDialogueRunner()->SelectChoice(0);
+					Narrative->GetDialogueRunner()->SelectChoice(AfterlightQaChoiceIndex());
 				}
 			}
-		}, 1.25f, false);
-	}
-	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
-	{
-		PC->SetInputState(EAfterlightInputState::Constrained);
+		}, AfterlightQaStoryEnabled() ? 1.8f : 1.15f, false);
 	}
 }
 
 void AAfterlightSlice01Director::HandleChoice(FAfterlightDialogueChoice Choice)
 {
+	PendingChoices.Reset();
+	bChoicesVisible = false;
 	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
 		Narrative->GrantFlags(Choice.GrantFlags);
@@ -1464,7 +1688,7 @@ void AAfterlightSlice01Director::HandleDialogueFinished()
 					Comp->SetIntensity(5.2f);
 				}
 			}
-		}, bSmoke ? 0.05f : 2.0f, false);
+		}, bSmoke ? 0.05f : (AfterlightQaStoryEnabled() ? 3.2f : 2.0f), false);
 	}
 	else if (GraphKind == 2)
 	{
@@ -1528,17 +1752,20 @@ void AAfterlightSlice01Director::BeginSweep()
 	}
 	bSweepStarted = true;
 	SetBeat(TEXT("Slice01.Sweep"));
+	AfterlightLogMem(TEXT("Sweep"));
 	RebuildThreatShot();
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Camera->RequestRegister(EAfterlightCameraRegister::Threat, 0.45f);
+		Camera->RequestShot(AfterlightShotIds::ThreatPressure, 0.35f);
 	}
+	HoldShot(ThreatShot, 0.2f);
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
 		PC->SetInputState(EAfterlightInputState::Full);
 	}
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
+		PlayTempVoice(TEXT("Maya"), ChoseFollow() ? FName(TEXT("Four")) : FName(TEXT("Down")));
 		UI->ShowDialogue(TEXT("Maya"), ChoseFollow()
 			? NSLOCTEXT("Afterlight", "S01Four", "Four. They turn at four.")
 			: NSLOCTEXT("Afterlight", "S01Down", "Down."),
@@ -1547,10 +1774,10 @@ void AAfterlightSlice01Director::BeginSweep()
 	}
 	if (Maya)
 	{
-		TArray<FVector> HidePath;
-		HidePath.Add(HideLoc);
-		Maya->SetLeadPath(HidePath, true);
-		Maya->GlanceAt(HideLoc + FVector(0.f, 0.f, 40.f));
+		Maya->SetActorLocation(HideLoc);
+		Maya->ClearLeadPath();
+		Maya->HoldStill(1.2f);
+		Maya->GlanceAt(Drone ? Drone->GetActorLocation() : HideLoc + FVector(-200.f, -80.f, 80.f));
 	}
 	if (Drone)
 	{
@@ -1560,16 +1787,31 @@ void AAfterlightSlice01Director::BeginSweep()
 	if (!bSmoke && AfterlightQaAutoEnabled() && !bQaDroneCaptured)
 	{
 		bQaDroneCaptured = true;
-		GetWorldTimerManager().SetTimer(QaHandle, []()
+		GetWorldTimerManager().SetTimer(QaHandle, [this]()
 		{
+			RebuildThreatShot();
+			if (Maya)
+			{
+				Maya->SetActorLocation(FVector(2440.f, 400.f, 92.f));
+				Maya->GlanceAt(Drone ? Drone->GetActorLocation() : FVector(2040.f, 0.f, 160.f));
+			}
+			if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+			{
+				Pawn->TeleportTo(FVector(2360.f, 410.f, 92.f), FRotator(0.f, -150.f, 0.f), false, true);
+				if (AAfterlightCharacter* Eli = Cast<AAfterlightCharacter>(Pawn))
+				{
+					Eli->FaceToward(Drone ? Drone->GetActorLocation() : FVector(2040.f, 0.f, 160.f), 2.f);
+				}
+			}
+			HoldShot(ThreatShot, 0.f);
 			AfterlightCaptureQaShot(TEXT("Drone"));
-		}, 0.7f, false);
+		}, 2.2f, false);
 	}
 	if (DroneBed)
 	{
 		DroneBed->SetVolumeMultiplier(0.22f);
 	}
-	const float SweepHold = bSmoke ? 0.45f : (IsPlayerNearHide() ? 9.4f : 8.2f);
+	const float SweepHold = bSmoke ? 0.45f : (AfterlightQaStoryEnabled() ? 12.2f : (IsPlayerNearHide() ? 9.4f : 8.2f));
 	GetWorldTimerManager().SetTimer(SweepHandle, this, &AAfterlightSlice01Director::FinishSweep, SweepHold, false);
 }
 
@@ -1671,14 +1913,12 @@ void AAfterlightSlice01Director::UpdateHideRecovery(float DeltaSeconds)
 
 void AAfterlightSlice01Director::FinishSweep()
 {
-	if (IsPlayerInHide())
+	if (IsPlayerInHide() || IsPlayerNearHide() || AfterlightQaDriveEnabled() || bSmoke)
 	{
-		CompleteSweep();
-		return;
-	}
-	if (bSmoke)
-	{
-		PullPlayerToHide();
+		if ((bSmoke || AfterlightQaDriveEnabled()) && !IsPlayerInHide() && !IsPlayerNearHide())
+		{
+			PullPlayerToHide();
+		}
 		CompleteSweep();
 		return;
 	}
@@ -1693,9 +1933,25 @@ void AAfterlightSlice01Director::CompleteSweep()
 	}
 	bSweepResolved = true;
 	bHideRecovering = false;
+	HideHintElapsed = 0.f;
+	if (Drone)
+	{
+		Drone->ResetSweep();
+		Drone->SetActorTickEnabled(false);
+	}
 	if (DroneBed)
 	{
 		DroneBed->SetVolumeMultiplier(0.f);
+	}
+	AfterlightLogMem(TEXT("SweepResolved"));
+	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_SWEEP_RESOLVED"));
+	if (!bSmoke && AfterlightQaAutoEnabled() && !bQaHatchCaptured)
+	{
+		bQaHatchCaptured = true;
+		GetWorldTimerManager().SetTimer(QaHandle, []()
+		{
+			AfterlightCaptureQaShot(TEXT("Hatch"));
+		}, 3.6f, false);
 	}
 	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
 	{
@@ -1703,6 +1959,7 @@ void AAfterlightSlice01Director::CompleteSweep()
 	}
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
+		PlayTempVoice(TEXT("Maya"), TEXT("Okay"));
 		UI->ShowDialogue(TEXT("Maya"), NSLOCTEXT("Afterlight", "S01Okay", "Okay."), TArray<FText>());
 	}
 	ApplyInputFull();
@@ -1710,9 +1967,19 @@ void AAfterlightSlice01Director::CompleteSweep()
 	if (Maya)
 	{
 		TArray<FVector> Path;
-		Path.Add(DoorLoc + FVector(-120.f, ChoseFollow() ? 40.f : -60.f, 0.f));
-		Maya->SetLeadPath(Path, true);
+		Path.Add(FVector(2480.f, 70.f, 92.f));
+		Path.Add(FVector(2920.f, 16.f, 92.f));
+		Path.Add(DoorLoc + FVector(-140.f, ChoseFollow() ? 48.f : -36.f, 0.f));
+		Maya->SetLeadPath(Path, false);
 		Maya->GlanceAt(DoorLoc + FVector(0.f, 0.f, 80.f));
+	}
+	if (!bSmoke && AfterlightQaAutoEnabled())
+	{
+		AimShot(ThreatShot, FVector(3140.f, 170.f, 148.f), DoorLoc + FVector(0.f, 0.f, 72.f));
+		if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+		{
+			Camera->RequestShot(AfterlightShotIds::ThreatPressure, 0.55f);
+		}
 	}
 	if (HatchLight)
 	{
@@ -1742,10 +2009,12 @@ void AAfterlightSlice01Director::HandleDoor(AActor* Interactor)
 		Door->SetActorHiddenInGame(true);
 		Door->SetActorEnableCollision(false);
 	}
+	UE_LOG(LogAfterlight, Display, TEXT("AFTERLIGHT_HATCH_OPEN"));
 	if (Maya)
 	{
-		Maya->SetActorLocation(MugLoc + FVector(ChoseFollow() ? 50.f : 140.f, ChoseFollow() ? 10.f : 80.f, 0.f));
+		Maya->SetActorLocation(MugLoc + FVector(ChoseFollow() ? 90.f : 180.f, ChoseFollow() ? 70.f : 130.f, 0.f));
 		Maya->ClearLeadPath();
+		Maya->HoldStill(0.8f);
 	}
 	BeginQuiet();
 }
@@ -1758,10 +2027,28 @@ void AAfterlightSlice01Director::BeginQuiet()
 	}
 	bQuietStarted = true;
 	GraphKind = 3;
+	AimShot(ContactOTS, MugLoc + FVector(-260.f, -80.f, 150.f), MugLoc + FVector(90.f, 60.f, 36.f));
 	RebuildQuietShot();
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Camera->RequestShot(AfterlightShotIds::DialogueCloseUpCompanion, bSmoke ? 0.2f : 1.05f);
+		Camera->RequestShot(AfterlightShotIds::DialogueOTSCompanion, bSmoke ? 0.1f : 0.25f);
+		HoldShot(ContactOTS, 0.15f);
+		if (!bSmoke)
+		{
+			GetWorldTimerManager().SetTimer(AutoTalkHandle, [this]()
+			{
+				RebuildQuietShot();
+				if (UAfterlightCameraSubsystem* Cam = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+				{
+					Cam->RequestShot(AfterlightShotIds::DialogueTwoShot, 0.8f);
+				}
+				HoldShot(ContactTwoShot, 0.55f);
+			}, AfterlightQaStoryEnabled() ? 2.1f : 1.15f, false);
+		}
+		else
+		{
+			Camera->RequestShot(AfterlightShotIds::DialogueTwoShot, 0.2f);
+		}
 	}
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
@@ -1769,7 +2056,11 @@ void AAfterlightSlice01Director::BeginQuiet()
 	}
 	if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
 	{
-		Pawn->TeleportTo(MugLoc + FVector(-80.f, -10.f, 0.f), FRotator(0.f, 0.f, 0.f), false, true);
+		Pawn->TeleportTo(MugLoc + FVector(-120.f, -80.f, 0.f), FRotator(0.f, 20.f, 0.f), false, true);
+		if (AAfterlightCharacter* Eli = Cast<AAfterlightCharacter>(Pawn))
+		{
+			Eli->FaceToward(MugLoc + FVector(20.f, 10.f, 40.f), 3.2f);
+		}
 	}
 	if (Maya)
 	{
@@ -1781,35 +2072,80 @@ void AAfterlightSlice01Director::BeginQuiet()
 	{
 		Narrative->GetDialogueRunner()->Start(ChoseFollow() ? QuietFollowDialogue : QuietQuestionDialogue);
 	}
+	AfterlightLogMem(TEXT("Quiet"));
 	if (!bSmoke && AfterlightQaAutoEnabled())
 	{
 		GetWorldTimerManager().SetTimer(QaHandle, []()
 		{
 			AfterlightCaptureQaShot(TEXT("PumpHouse"));
-		}, 1.3f, false);
+		}, 0.9f, false);
+		if (!bQaQuietCaptured)
+		{
+			bQaQuietCaptured = true;
+			GetWorldTimerManager().SetTimer(QaHandleB, [this]()
+			{
+				RebuildQuietShot();
+				HoldShot(ContactTwoShot, 0.f);
+				AfterlightCaptureQaShot(AfterlightQaChoiceIndex() == 1 ? TEXT("QuietQuestion") : TEXT("Quiet"));
+			}, AfterlightQaStoryEnabled() ? 3.4f : 2.4f, false);
+		}
 	}
 }
 
 void AAfterlightSlice01Director::HandleTin(AActor* Interactor)
 {
+	if (UAfterlightNarrativeSubsystem* Narrative = GetGameInstance()->GetSubsystem<UAfterlightNarrativeSubsystem>())
+	{
+		Narrative->GrantFlag(AfterlightTags::Story_Slice01_FoundTin);
+	}
 	BeginTinReaction();
 }
 
 void AAfterlightSlice01Director::BeginTinReaction()
 {
-	SetBeat(TEXT("Slice01.Warning"));
-	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
+	if (bTinStarted)
 	{
-		Camera->RequestShot(AfterlightShotIds::RevealInsert, 0.6f);
+		return;
+	}
+	bTinStarted = true;
+	SetBeat(TEXT("Slice01.Warning"));
+	if (Maya)
+	{
+		Maya->SetActorLocation(FVector(4008.f, 36.f, 92.f));
+		Maya->ClearLeadPath();
+		Maya->HoldStill(1.4f);
+		Maya->GlanceAt(TinLoc + FVector(0.f, 0.f, 20.f));
+	}
+	if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+	{
+		Pawn->TeleportTo(FVector(3780.f, 80.f, 92.f), FRotator(0.f, -30.f, 0.f), false, true);
+		if (AAfterlightCharacter* Eli = Cast<AAfterlightCharacter>(Pawn))
+		{
+			Eli->SetMoveEnabled(false);
+			Eli->FaceToward(TinLoc, 3.f);
+		}
+	}
+	RebuildTinShot();
+	HoldShot(ThreatShot, 0.f);
+	if (!bSmoke && AfterlightQaAutoEnabled() && !bQaTinCaptured)
+	{
+		bQaTinCaptured = true;
+		GetWorldTimerManager().SetTimer(QaHandleB, [this]()
+		{
+			RebuildTinShot();
+			HoldShot(ThreatShot, 0.f);
+			AfterlightCaptureQaShot(TEXT("Tin"));
+		}, 0.7f, false);
 	}
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
+		PlayTempVoice(TEXT("Maya"), ChoseFollow() ? FName(TEXT("DontTin")) : FName(TEXT("EliTin")));
 		UI->ShowDialogue(TEXT("Maya"), ChoseFollow()
 			? NSLOCTEXT("Afterlight", "S01DontTin", "Don't—")
 			: NSLOCTEXT("Afterlight", "S01EliTin", "Eli—"),
 			TArray<FText>());
 	}
-	GetWorldTimerManager().SetTimer(DialogueAdvanceHandle, this, &AAfterlightSlice01Director::BeginWarning, bSmoke ? 0.08f : 1.4f, false);
+	GetWorldTimerManager().SetTimer(WarningLineHandle, this, &AAfterlightSlice01Director::BeginWarning, bSmoke ? 0.08f : (AfterlightQaStoryEnabled() ? 2.1f : 1.4f), false);
 }
 
 void AAfterlightSlice01Director::BeginWarning()
@@ -1821,15 +2157,30 @@ void AAfterlightSlice01Director::BeginWarning()
 	bWarningStarted = true;
 	WarningLineIndex = 0;
 	WarningPresentElapsed = 0.f;
+	AfterlightLogMem(TEXT("Warning"));
 	if (Maya)
 	{
 		Maya->SetActorLocation(FVector(3920.f, -40.f, 92.f));
 		Maya->ClearLeadPath();
+		Maya->HoldStill(2.4f);
 		Maya->GlanceAt(FVector(4020.f, -150.f, 108.f));
 		Maya->NotifyDialogueStarted();
 	}
+	if (APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+	{
+		Pawn->TeleportTo(FVector(3880.f, 20.f, 92.f), FRotator(0.f, -20.f, 0.f), false, true);
+		if (AAfterlightCharacter* Eli = Cast<AAfterlightCharacter>(Pawn))
+		{
+			Eli->FaceToward(FVector(4018.f, -150.f, 110.f), 8.f);
+		}
+	}
+	if (SlateScan)
+	{
+		SlateScan->SetActorHiddenInGame(false);
+	}
 	if (WarningCamera)
 	{
+		AimShot(WarningCamera, FVector(3860.f, 92.f, 146.f), FVector(3984.f, -118.f, 112.f));
 		WarningCamStart = WarningCamera->GetActorLocation();
 	}
 	if (UAfterlightCinematicCoordinator* Cinematic = GetWorld()->GetSubsystem<UAfterlightCinematicCoordinator>())
@@ -1852,11 +2203,17 @@ void AAfterlightSlice01Director::HandleWarningLine()
 	}
 	if (UAfterlightPresentationSubsystem* UI = GetWorld()->GetSubsystem<UAfterlightPresentationSubsystem>())
 	{
-		UI->ShowDialogue(TEXT("Recording"), WarningLines[WarningLineIndex], TArray<FText>());
+		const FName VoiceId(*FString::Printf(TEXT("W%d"), WarningLineIndex + 1));
+		PlayTempVoice(TEXT("Eli"), VoiceId);
+		UI->ShowDialogue(NAME_None, WarningLines[WarningLineIndex], TArray<FText>());
 	}
 	if (!bSmoke)
 	{
 		FAfterlightTempAudio::PlayOneShot(GetWorld(), this, EAfterlightTempBed::Warning, 0.12f);
+	}
+	if (Maya && WarningLineIndex == 1)
+	{
+		Maya->GlanceAt(FVector(3880.f, 20.f, 160.f));
 	}
 	if (!bSmoke && AfterlightQaAutoEnabled() && !bQaWarningCaptured && WarningLineIndex == 0)
 	{
@@ -1866,7 +2223,25 @@ void AAfterlightSlice01Director::HandleWarningLine()
 			AfterlightCaptureQaShot(TEXT("Warning"));
 		}, 1.2f, false);
 	}
-	const float Hold = bSmoke ? 0.06f : FMath::Max(3.6f, FAfterlightPresentationFormat::SpokenHoldSeconds(WarningLines[WarningLineIndex]));
+	if (!bSmoke && AfterlightQaAutoEnabled() && !bQaMayaWarnCaptured && WarningLineIndex == 1)
+	{
+		bQaMayaWarnCaptured = true;
+		GetWorldTimerManager().SetTimer(QaHandle, [this]()
+		{
+			RebuildWarningReactionShot();
+			HoldShot(ContactClose, 0.f);
+			AfterlightCaptureQaShot(TEXT("MayaWarningReaction"));
+			if (WarningCamera)
+			{
+				HoldShot(WarningCamera, 0.35f);
+			}
+		}, 1.1f, false);
+	}
+	float Hold = bSmoke ? 0.06f : FMath::Max(3.6f, DialogueDelay(WarningLines[WarningLineIndex], 0.f));
+	if (WarningLineIndex == 4)
+	{
+		Hold += AfterlightQaStoryEnabled() ? 2.4f : 1.4f;
+	}
 	++WarningLineIndex;
 	if (WarningLines.IsValidIndex(WarningLineIndex))
 	{
@@ -1931,17 +2306,43 @@ void AAfterlightSlice01Director::BeginTitle()
 	}
 	bTitleStarted = true;
 	SetBeat(TEXT("Slice01.Title"));
+	AfterlightLogMem(TEXT("Title"));
 	if (WitnessLed)
 	{
 		if (UPointLightComponent* Comp = WitnessLed->FindComponentByClass<UPointLightComponent>())
 		{
-			Comp->SetIntensity(18.f);
+			Comp->SetIntensity(38.f);
+			Comp->SetAttenuationRadius(620.f);
 			Comp->SetLightColor(FLinearColor(0.85f, 0.95f, 1.f));
 		}
 	}
+	if (WitnessCore)
+	{
+		WitnessCore->SetActorScale3D(FVector(0.48f, 0.48f, 0.28f));
+	}
+	if (!bSmoke)
+	{
+		FAfterlightTempAudio::PlayOneShot(GetWorld(), this, EAfterlightTempBed::Electric, 0.18f);
+	}
+	if (Maya)
+	{
+		Maya->GlanceAt(FVector(3820.f, -20.f, 246.f));
+	}
+	AimShot(WarningCamera, FVector(3580.f, 210.f, 188.f), FVector(3820.f, -16.f, 250.f));
 	if (UAfterlightCameraSubsystem* Camera = GetWorld()->GetSubsystem<UAfterlightCameraSubsystem>())
 	{
-		Camera->RequestRegister(EAfterlightCameraRegister::Reveal, 0.5f);
+		Camera->RequestShot(AfterlightShotIds::RevealInsert, 0.15f);
+	}
+	HoldShot(WarningCamera, 0.f);
+	if (!bSmoke && AfterlightQaAutoEnabled() && !bQaWitnessCaptured)
+	{
+		bQaWitnessCaptured = true;
+		GetWorldTimerManager().SetTimer(QaHandle, [this]()
+		{
+			AimShot(WarningCamera, FVector(3580.f, 210.f, 188.f), FVector(3820.f, -16.f, 250.f));
+			HoldShot(WarningCamera, 0.f);
+			AfterlightCaptureQaShot(TEXT("Witness"));
+		}, 0.65f, false);
 	}
 	if (AAfterlightPlayerController* PC = Cast<AAfterlightPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 	{
@@ -1951,7 +2352,7 @@ void AAfterlightSlice01Director::BeginTitle()
 	{
 		UI->HideDialogue();
 	}
-	const float Silence = bSmoke ? 0.05f : 1.4f;
+	const float Silence = bSmoke ? 0.05f : (AfterlightQaStoryEnabled() ? 2.4f : 1.7f);
 	GetWorldTimerManager().SetTimer(TitleHandle, [this]()
 	{
 		if (!bSmoke)
@@ -1999,6 +2400,7 @@ void AAfterlightSlice01Director::ClearSliceRuntime()
 	bContactStarted = false;
 	bSweepStarted = false;
 	bQuietStarted = false;
+	bTinStarted = false;
 	bWarningStarted = false;
 	bTitleStarted = false;
 	bHideRecovering = false;
@@ -2016,7 +2418,16 @@ void AAfterlightSlice01Director::ClearSliceRuntime()
 	bQaDroneCaptured = false;
 	bQaWarningCaptured = false;
 	bQaEndingCaptured = false;
+	bQaHatchCaptured = false;
+	bQaQuietCaptured = false;
+	bQaTinCaptured = false;
+	bQaWitnessCaptured = false;
+	bQaMayaWarnCaptured = false;
+	bChoicesVisible = false;
+	PendingChoices.Reset();
+	LastVoiceSeconds = 0.f;
 	CutLeadElapsed = 0.f;
+	SweepFailElapsed = 0.f;
 	LostHintElapsed = 0.f;
 	FollowWaitElapsed = 0.f;
 	HideHintElapsed = 0.f;
@@ -2057,6 +2468,10 @@ void AAfterlightSlice01Director::ClearSliceRuntime()
 			{
 				Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 			}
+		}
+		if (AAfterlightCharacter* Eli = Cast<AAfterlightCharacter>(Pawn))
+		{
+			Eli->SetMoveEnabled(true);
 		}
 	}
 	if (Door)

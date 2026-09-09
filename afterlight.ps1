@@ -1,6 +1,6 @@
 param(
 	[Parameter(Position = 0)]
-	[ValidateSet("play", "build", "test", "smoke", "verify", "all")]
+	[ValidateSet("play", "play-safe", "qa", "qa-story", "qa-question", "build", "test", "smoke", "verify", "all")]
 	[string]$Command = "play"
 )
 
@@ -177,6 +177,320 @@ function Invoke-AfterlightAutomation {
 	Write-Host "TEST OK"
 }
 
+function Get-AfterlightBaseDpcvars {
+	return "r.Streaming.PoolSize=64,r.ScreenPercentage=50,sg.ViewDistanceQuality=0,sg.AntiAliasingQuality=0,sg.ShadowQuality=0,sg.GlobalIlluminationQuality=0,sg.ReflectionQuality=0,sg.PostProcessQuality=0,sg.TextureQuality=0,sg.EffectsQuality=0,sg.FoliageQuality=0,sg.ShadingQuality=0,r.Lumen.DiffuseIndirect.Allow=0,r.Shadow.Virtual.Enable=0,r.Nanite=0,r.GenerateMeshDistanceFields=0,r.DefaultFeature.MotionBlur=0,r.DefaultFeature.Bloom=0,r.BloomQuality=0,r.AmbientOcclusionLevels=0,r.LightFunctionQuality=0,Afterlight.Camera.AllowDOF=0"
+}
+
+function Show-AfterlightCommit {
+	$os = Get-CimInstance Win32_OperatingSystem
+	$freeGB = [math]::Round($os.FreePhysicalMemory / 1MB, 2)
+	$totalGB = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
+	$virtFreeGB = [math]::Round($os.FreeVirtualMemory / 1MB, 2)
+	$virtTotalGB = [math]::Round($os.TotalVirtualMemorySize / 1MB, 2)
+	$commitGB = [math]::Round(($os.TotalVirtualMemorySize - $os.FreeVirtualMemory) / 1MB, 2)
+	$pf = Get-CimInstance Win32_PageFileUsage -ErrorAction SilentlyContinue
+	Write-Host ("Physical RAM: {0} / {1} GB free" -f $freeGB, $totalGB)
+	Write-Host ("Commit:       {0} / {1} GB used (free virtual {2} GB)" -f $commitGB, $virtTotalGB, $virtFreeGB)
+	if ($pf) {
+		Write-Host ("Pagefile:     {0}  allocated {1} MB  used {2} MB" -f $pf.Name, $pf.AllocatedBaseSize, $pf.CurrentUsage)
+	}
+	$docker = Get-Process -Name "Docker Desktop","com.docker.backend","vmmem","vmmemWSL" -ErrorAction SilentlyContinue
+	if ($docker) {
+		Write-Host ("WARN: Docker/WSL still running: {0}" -f (($docker.Name | Select-Object -Unique) -join ", "))
+	}
+	return [pscustomobject]@{
+		FreePhysicalGB = $freeGB
+		CommitGB = $commitGB
+		VirtTotalGB = $virtTotalGB
+		VirtFreeGB = $virtFreeGB
+	}
+}
+
+function Set-AfterlightPlayIni([bool]$MinimizeEditor) {
+	$savedPlay = Join-Path $ProjectRoot "Saved\Config\WindowsEditor\EditorPerProjectUserSettings.ini"
+	if (-not (Test-Path $savedPlay)) {
+		return
+	}
+	$ini = Get-Content $savedPlay -Raw
+	$ini = $ini -replace "LastExecutedPlayModeLocation=.*", "LastExecutedPlayModeLocation=PlayLocation_NewWindow"
+	if ($ini -notmatch "LastExecutedPlayModeType=") {
+		$ini = $ini -replace "\[/Script/UnrealEd\.LevelEditorPlaySettings\]", "[/Script/UnrealEd.LevelEditorPlaySettings]`r`nLastExecutedPlayModeType=PlayMode_InEditorFloating"
+	} else {
+		$ini = $ini -replace "LastExecutedPlayModeType=.*", "LastExecutedPlayModeType=PlayMode_InEditorFloating"
+	}
+	$ini = $ini -replace "NewWindowWidth=.*", "NewWindowWidth=854"
+	$ini = $ini -replace "NewWindowHeight=.*", "NewWindowHeight=480"
+	$ini = $ini -replace "ClientWindowWidth=.*", "ClientWindowWidth=854"
+	$ini = $ini -replace "ClientWindowHeight=.*", "ClientWindowHeight=480"
+	$ini = $ini -replace "LastSize=.*", "LastSize=(X=854,Y=480)"
+	$ini = $ini -replace "CenterNewWindow=.*", "CenterNewWindow=True"
+	$minimizeValue = if ($MinimizeEditor) { "True" } else { "False" }
+	$ini = $ini -replace "bShouldMinimizeEditorOnNonVRPIE=.*", "bShouldMinimizeEditorOnNonVRPIE=$minimizeValue"
+	$ini = $ini -replace "bUseMouseForTouch=.*", "bUseMouseForTouch=False"
+	Set-Content -Path $savedPlay -Value $ini -NoNewline
+	if ($MinimizeEditor) {
+		Write-Host "Play settings: New Editor Window 854x480, editor minimized during PIE."
+	} else {
+		Write-Host "Play settings: New Editor Window 854x480."
+	}
+}
+
+function Invoke-AfterlightEditorPlay([string]$Profile) {
+	Write-Host "AFTERLIGHT"
+	Write-Host "Editor:  $Editor"
+	Write-Host "Project: $ProjectFile"
+	Write-Host "Map:     $Map"
+	Write-Host "Profile: $Profile"
+	Write-Host ""
+	$mem = Show-AfterlightCommit
+	if ($mem.FreePhysicalGB -lt 3 -or $mem.VirtFreeGB -lt 8) {
+		Write-Host "WARN: Commit/RAM headroom is low for Unreal Editor on this laptop."
+	}
+
+	$existing = @(Get-AfterlightEditorProcess)
+	if ($existing.Count -gt 0) {
+		$pidExisting = $existing[0].ProcessId
+		Write-Host "Unreal Editor is already running (PID $pidExisting)."
+		Show-EditorWindow -ProcessId $pidExisting
+		if (Test-Slice01Loaded) {
+			Write-Host "OK: Unreal Editor is already running (PID $pidExisting). Slice01 is loaded."
+			Write-Host "The game is not playing yet."
+			Write-Host "Press Alt+P to start AFTERLIGHT in a New Editor Window (854x480)."
+			exit 0
+		}
+		Write-Host "Unreal Editor is running, but Slice01 is not confirmed in the log yet."
+		Write-Host "Wait for the viewport, then press Alt+P to start AFTERLIGHT in a New Editor Window."
+		exit 0
+	}
+
+	Write-Host "Launching Unreal Editor 5.8.2..."
+	Set-AfterlightPlayIni -MinimizeEditor ($Profile -eq "play-safe")
+	$dpcvars = Get-AfterlightBaseDpcvars
+	if ($Profile -eq "play-safe") {
+		$dpcvars = $dpcvars -replace "r.Streaming.PoolSize=64", "r.Streaming.PoolSize=48"
+	}
+	$launchTime = Get-Date
+	try {
+		$proc = Start-Process -FilePath $Editor -ArgumentList @(
+			"`"$ProjectFile`"",
+			$Map,
+			"-ForceLogFlush",
+			"-NoLiveCoding",
+			"-NoSourceControl",
+			"-nosplash",
+			"-dx11",
+			"-dpcvars=$dpcvars",
+			"-AfterlightAutoPlay",
+			"-ExecCmds=DisableAllScreenMessages"
+		) -WorkingDirectory $ProjectRoot -PassThru
+	}
+	catch {
+		Fail-Launch "Start-Process threw: $($_.Exception.Message)"
+	}
+
+	if (-not $proc) {
+		Fail-Launch "Start-Process did not return a process."
+	}
+
+	Start-Sleep -Seconds 4
+	if ($proc.HasExited) {
+		Fail-Launch "Unreal Editor exited immediately (code $($proc.ExitCode))."
+	}
+
+	Write-Host "Started PID $($proc.Id). Waiting for Slice01 to load..."
+	$deadline = (Get-Date).AddSeconds(180)
+	$mapLoaded = $false
+	while ((Get-Date) -lt $deadline) {
+		Start-Sleep -Seconds 5
+		if ($proc.HasExited) {
+			Fail-Launch "Unreal Editor exited before the map finished loading (code $($proc.ExitCode))."
+		}
+		if (Test-CurrentSessionLog -LaunchTime $launchTime) {
+			$reason = Get-LaunchFailureReason
+			if ($reason) {
+				Fail-Launch "Unreal Editor hit a fatal startup error."
+			}
+			if (Test-Slice01Loaded) {
+				$mapLoaded = $true
+				break
+			}
+		}
+	}
+
+	$still = Get-AfterlightEditorProcess
+	if (-not $still) {
+		Fail-Launch "Unreal Editor is not running after launch."
+	}
+
+	Show-EditorWindow -ProcessId $still.ProcessId
+	if (-not $mapLoaded) {
+		Fail-Launch "Unreal Editor is running (PID $($still.ProcessId)), but Slice01 did not load within 180 seconds."
+	}
+
+	Start-Sleep -Seconds 12
+	if ($proc.HasExited) {
+		Fail-Launch "Unreal Editor loaded Slice01, then exited (code $($proc.ExitCode))."
+	}
+	$reason = Get-LaunchFailureReason
+	if ($reason) {
+		Fail-Launch "Unreal Editor loaded Slice01, then hit a fatal error."
+	}
+	$still = Get-AfterlightEditorProcess
+	if (-not $still) {
+		Fail-Launch "Unreal Editor loaded Slice01, then closed."
+	}
+
+	Show-EditorWindow -ProcessId $still.ProcessId
+	Write-Host "OK: Unreal Editor is running (PID $($still.ProcessId)). Slice01 is loaded."
+	Write-Host "Waiting for auto New Editor Window PIE (854x480)..."
+	$pieDeadline = (Get-Date).AddSeconds(90)
+	$pieStarted = $false
+	while ((Get-Date) -lt $pieDeadline) {
+		Start-Sleep -Seconds 3
+		if ($proc.HasExited) {
+			Fail-Launch "Unreal Editor loaded Slice01, then exited (code $($proc.ExitCode))."
+		}
+		$reason = Get-LaunchFailureReason
+		if ($reason) {
+			Fail-Launch "Unreal Editor loaded Slice01, then hit a fatal error."
+		}
+		if (Select-String -Path $LogFile -Pattern "AFTERLIGHT_AUTOPLAY request_pie|PIE:|PlayInEditor|AFTERLIGHT_OWNER_ENTRY" -ErrorAction SilentlyContinue) {
+			$pieStarted = $true
+			break
+		}
+	}
+	if ($pieStarted) {
+		Start-Sleep -Seconds 2
+		1..8 | ForEach-Object {
+			Pin-AfterlightPlayWindow -ProcessId $still.ProcessId
+			Start-Sleep -Milliseconds 400
+		}
+		Write-Host "OK: Play-in-editor was requested. Preview is pinned to the primary monitor."
+		if ($Profile -eq "play-safe") {
+			Write-Host "Safe profile: editor should minimize. Click / Space / Enter on the card."
+		} else {
+			Write-Host "Click / Space / Enter on the card. Owner play has no screenshot queue."
+		}
+	} else {
+		Write-Host "WARN: Auto-PIE was not confirmed in the log. Focus AFTERLIGHT and press Alt+P."
+		Write-Host "Click the AFTERLIGHT Preview window, then click / Space / Enter on the card."
+	}
+	exit 0
+}
+
+function Invoke-AfterlightQa {
+	param(
+		[int]$Story = 0,
+		[int]$Choice = 0,
+		[int]$TimeoutMin = 18,
+		[string]$Label = "qa"
+	)
+	Write-Host "AFTERLIGHT $Label - standalone rendered full-slice capture"
+	Write-Host "Frames: Saved/QA/Sprint03/"
+	if ($Story -eq 1) {
+		Write-Host "Pacing: human-authored holds. Auto-selects branch $Choice."
+	} else {
+		Write-Host "Pacing: QA drive. Auto-selects branch $Choice."
+	}
+	Write-Host ""
+	$mem = Show-AfterlightCommit
+	$existing = @(Get-AfterlightEditorProcess)
+	if ($existing.Count -gt 0) {
+		Write-Host "FAIL: Close the existing AFTERLIGHT editor (PID $($existing[0].ProcessId)) before $Label."
+		exit 1
+	}
+	$qaDir = Join-Path $ProjectRoot "Saved\QA\Sprint03"
+	New-Item -ItemType Directory -Force -Path $qaDir | Out-Null
+	$dpcvars = (Get-AfterlightBaseDpcvars) + ",Afterlight.QaAuto=1,Afterlight.QaDrive=1,Afterlight.QaStory=$Story,Afterlight.QaChoice=$Choice"
+	$launchTime = Get-Date
+	Write-Host "Launching standalone DX11 game (854x480). This is not NullRHI."
+	try {
+		$proc = Start-Process -FilePath $Editor -ArgumentList @(
+			"`"$ProjectFile`"",
+			$Map,
+			"-game",
+			"-windowed",
+			"-ResX=854",
+			"-ResY=480",
+			"-ForceLogFlush",
+			"-NoLiveCoding",
+			"-NoSourceControl",
+			"-nosplash",
+			"-dx11",
+			"-dpcvars=$dpcvars",
+			"-ExecCmds=DisableAllScreenMessages"
+		) -WorkingDirectory $ProjectRoot -PassThru
+	}
+	catch {
+		Fail-Launch "Start-Process threw: $($_.Exception.Message)"
+	}
+	if (-not $proc) {
+		Fail-Launch "Start-Process did not return a process."
+	}
+	Write-Host "Started PID $($proc.Id). Waiting for ending (max $TimeoutMin minutes)..."
+	$deadline = (Get-Date).AddMinutes($TimeoutMin)
+	$sawWake = $false
+	$sawSweep = $false
+	$sawEnding = $false
+	$runtime = $null
+	$sessionReady = $false
+	while ((Get-Date) -lt $deadline) {
+		Start-Sleep -Seconds 8
+		if (-not (Test-Path $LogFile)) {
+			continue
+		}
+		if (-not $sessionReady) {
+			if (Test-CurrentSessionLog -LaunchTime $launchTime) {
+				$sessionReady = $true
+				Write-Host "Current session log is open."
+			} else {
+				continue
+			}
+		}
+		if (-not $sawWake -and (Select-String -Path $LogFile -Pattern "AFTERLIGHT_WAKE_VISIBLE" -ErrorAction SilentlyContinue)) {
+			$sawWake = $true
+			Write-Host ("WAKE at {0:n0}s" -f ((Get-Date) - $launchTime).TotalSeconds)
+			Show-AfterlightCommit | Out-Null
+		}
+		if (-not $sawSweep -and (Select-String -Path $LogFile -Pattern "AFTERLIGHT_SWEEP_RESOLVED" -ErrorAction SilentlyContinue)) {
+			$sawSweep = $true
+			Write-Host ("SWEEP at {0:n0}s" -f ((Get-Date) - $launchTime).TotalSeconds)
+			Show-AfterlightCommit | Out-Null
+		}
+		$endHit = Select-String -Path $LogFile -Pattern 'AFTERLIGHT_SLICE_RUNTIME=([0-9.]+)s' -ErrorAction SilentlyContinue | Select-Object -Last 1
+		if ($endHit) {
+			$runtime = $endHit.Matches[0].Groups[1].Value
+			$sawEnding = $true
+			Write-Host ("ENDING runtime={0}s wall={1:n0}s" -f $runtime, ((Get-Date) - $launchTime).TotalSeconds)
+			break
+		}
+		if ($proc.HasExited) {
+			break
+		}
+		$reason = Get-LaunchFailureReason
+		if ($reason) {
+			Fail-Launch "Standalone QA hit a fatal error."
+		}
+	}
+	Start-Sleep -Seconds 4
+	if (-not $proc.HasExited) {
+		try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+	}
+	Write-Host ""
+	Write-Host "QA shots:"
+	Get-ChildItem $qaDir -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("  {0}" -f $_.FullName) }
+	if ($sawEnding) {
+		Write-Host "QA OK: ending reached."
+		exit 0
+	}
+	if ($sawSweep) {
+		Write-Host "QA PARTIAL: sweep resolved, ending not reached."
+		Show-LogTail
+		exit 1
+	}
+	Fail-Launch "QA did not reach the ending."
+}
+
 function Invoke-AfterlightSmoke {
 	$sliceLog = Join-Path $ProjectRoot "Saved\Logs\AfterlightSliceSmoke.log"
 	$labLog = Join-Path $ProjectRoot "Saved\Logs\AfterlightSmoke.log"
@@ -195,167 +509,19 @@ function Invoke-AfterlightSmoke {
 
 switch ($Command) {
 	"play" {
-		Write-Host "AFTERLIGHT"
-		Write-Host "Editor:  $Editor"
-		Write-Host "Project: $ProjectFile"
-		Write-Host "Map:     $Map"
-		Write-Host ""
-
-		$os = Get-CimInstance Win32_OperatingSystem
-		$freeGB = [math]::Round($os.FreePhysicalMemory / 1MB, 2)
-		$totalGB = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
-		$virtFreeGB = [math]::Round($os.FreeVirtualMemory / 1MB, 2)
-		$virtTotalGB = [math]::Round($os.TotalVirtualMemorySize / 1MB, 2)
-		$commitGB = [math]::Round(($os.TotalVirtualMemorySize - $os.FreeVirtualMemory) / 1MB, 2)
-		$pf = Get-CimInstance Win32_PageFileUsage -ErrorAction SilentlyContinue
-		Write-Host ("Physical RAM: {0} / {1} GB free" -f $freeGB, $totalGB)
-		Write-Host ("Commit:       {0} / {1} GB used (free virtual {2} GB)" -f $commitGB, $virtTotalGB, $virtFreeGB)
-		if ($pf) {
-			Write-Host ("Pagefile:     {0}  allocated {1} MB  used {2} MB  system-managed" -f $pf.Name, $pf.AllocatedBaseSize, $pf.CurrentUsage)
-		}
-		if ($freeGB -lt 3 -or $virtFreeGB -lt 8) {
-			Write-Host "WARN: Commit/RAM headroom is low for Unreal Editor on this laptop."
-		}
-
-		$existing = @(Get-AfterlightEditorProcess)
-		if ($existing.Count -gt 0) {
-			$pidExisting = $existing[0].ProcessId
-			Write-Host "Unreal Editor is already running (PID $pidExisting)."
-			Show-EditorWindow -ProcessId $pidExisting
-			if (Test-Slice01Loaded) {
-				Write-Host "OK: Unreal Editor is already running (PID $pidExisting). Slice01 is loaded."
-				Write-Host "The game is not playing yet."
-				Write-Host "Press Alt+P to start AFTERLIGHT in a New Editor Window (854x480)."
-				exit 0
-			}
-			Write-Host "Unreal Editor is running, but Slice01 is not confirmed in the log yet."
-			Write-Host "Wait for the viewport, then press Alt+P to start AFTERLIGHT in a New Editor Window."
-			exit 0
-		}
-
-		Write-Host "Launching Unreal Editor 5.8.2..."
-		$savedPlay = Join-Path $ProjectRoot "Saved\Config\WindowsEditor\EditorPerProjectUserSettings.ini"
-		if (Test-Path $savedPlay) {
-			$ini = Get-Content $savedPlay -Raw
-			$ini = $ini -replace "LastExecutedPlayModeLocation=.*", "LastExecutedPlayModeLocation=PlayLocation_NewWindow"
-			if ($ini -notmatch "LastExecutedPlayModeType=") {
-				$ini = $ini -replace "\[/Script/UnrealEd\.LevelEditorPlaySettings\]", "[/Script/UnrealEd.LevelEditorPlaySettings]`r`nLastExecutedPlayModeType=PlayMode_InEditorFloating"
-			} else {
-				$ini = $ini -replace "LastExecutedPlayModeType=.*", "LastExecutedPlayModeType=PlayMode_InEditorFloating"
-			}
-			$ini = $ini -replace "NewWindowWidth=.*", "NewWindowWidth=854"
-			$ini = $ini -replace "NewWindowHeight=.*", "NewWindowHeight=480"
-			$ini = $ini -replace "ClientWindowWidth=.*", "ClientWindowWidth=854"
-			$ini = $ini -replace "ClientWindowHeight=.*", "ClientWindowHeight=480"
-			$ini = $ini -replace "LastSize=.*", "LastSize=(X=854,Y=480)"
-			$ini = $ini -replace "CenterNewWindow=.*", "CenterNewWindow=True"
-			$ini = $ini -replace "bShouldMinimizeEditorOnNonVRPIE=.*", "bShouldMinimizeEditorOnNonVRPIE=False"
-			Set-Content -Path $savedPlay -Value $ini -NoNewline
-			Write-Host "Play settings: New Editor Window 854x480."
-		}
-		$launchTime = Get-Date
-		try {
-			$proc = Start-Process -FilePath $Editor -ArgumentList @(
-				"`"$ProjectFile`"",
-				$Map,
-				"-ForceLogFlush",
-				"-NoLiveCoding",
-				"-NoSourceControl",
-				"-nosplash",
-				"-dx11",
-				"-dpcvars=r.Streaming.PoolSize=64,r.ScreenPercentage=50,sg.ViewDistanceQuality=0,sg.AntiAliasingQuality=0,sg.ShadowQuality=0,sg.GlobalIlluminationQuality=0,sg.ReflectionQuality=0,sg.PostProcessQuality=0,sg.TextureQuality=0,sg.EffectsQuality=0,sg.FoliageQuality=0,sg.ShadingQuality=0,r.Lumen.DiffuseIndirect.Allow=0,r.Shadow.Virtual.Enable=0,r.Nanite=0,r.GenerateMeshDistanceFields=0,r.DefaultFeature.MotionBlur=0,r.DefaultFeature.Bloom=0,r.BloomQuality=0,r.AmbientOcclusionLevels=0,r.LightFunctionQuality=0,Afterlight.Camera.AllowDOF=0,Afterlight.QaAuto=1,Afterlight.QaDrive=1",
-				"-AfterlightAutoPlay",
-				"-ExecCmds=DisableAllScreenMessages"
-			) -WorkingDirectory $ProjectRoot -PassThru
-		}
-		catch {
-			Fail-Launch "Start-Process threw: $($_.Exception.Message)"
-		}
-
-		if (-not $proc) {
-			Fail-Launch "Start-Process did not return a process."
-		}
-
-		Start-Sleep -Seconds 4
-		if ($proc.HasExited) {
-			Fail-Launch "Unreal Editor exited immediately (code $($proc.ExitCode))."
-		}
-
-		Write-Host "Started PID $($proc.Id). Waiting for Slice01 to load..."
-		$deadline = (Get-Date).AddSeconds(180)
-		$mapLoaded = $false
-		while ((Get-Date) -lt $deadline) {
-			Start-Sleep -Seconds 5
-			if ($proc.HasExited) {
-				Fail-Launch "Unreal Editor exited before the map finished loading (code $($proc.ExitCode))."
-			}
-			if (Test-CurrentSessionLog -LaunchTime $launchTime) {
-				$reason = Get-LaunchFailureReason
-				if ($reason) {
-					Fail-Launch "Unreal Editor hit a fatal startup error."
-				}
-				if (Test-Slice01Loaded) {
-					$mapLoaded = $true
-					break
-				}
-			}
-		}
-
-		$still = Get-AfterlightEditorProcess
-		if (-not $still) {
-			Fail-Launch "Unreal Editor is not running after launch."
-		}
-
-		Show-EditorWindow -ProcessId $still.ProcessId
-		if (-not $mapLoaded) {
-			Fail-Launch "Unreal Editor is running (PID $($still.ProcessId)), but Slice01 did not load within 180 seconds."
-		}
-
-		Start-Sleep -Seconds 12
-		if ($proc.HasExited) {
-			Fail-Launch "Unreal Editor loaded Slice01, then exited (code $($proc.ExitCode))."
-		}
-		$reason = Get-LaunchFailureReason
-		if ($reason) {
-			Fail-Launch "Unreal Editor loaded Slice01, then hit a fatal error."
-		}
-		$still = Get-AfterlightEditorProcess
-		if (-not $still) {
-			Fail-Launch "Unreal Editor loaded Slice01, then closed."
-		}
-
-		Show-EditorWindow -ProcessId $still.ProcessId
-		Write-Host "OK: Unreal Editor is running (PID $($still.ProcessId)). Slice01 is loaded."
-		Write-Host "Waiting for auto New Editor Window PIE (854x480)..."
-		$pieDeadline = (Get-Date).AddSeconds(90)
-		$pieStarted = $false
-		while ((Get-Date) -lt $pieDeadline) {
-			Start-Sleep -Seconds 3
-			if ($proc.HasExited) {
-				Fail-Launch "Unreal Editor loaded Slice01, then exited (code $($proc.ExitCode))."
-			}
-			$reason = Get-LaunchFailureReason
-			if ($reason) {
-				Fail-Launch "Unreal Editor loaded Slice01, then hit a fatal error."
-			}
-			if (Select-String -Path $LogFile -Pattern "AFTERLIGHT_AUTOPLAY request_pie|PIE:|PlayInEditor|AFTERLIGHT_OWNER_ENTRY" -ErrorAction SilentlyContinue) {
-				$pieStarted = $true
-				break
-			}
-		}
-		if ($pieStarted) {
-			Start-Sleep -Seconds 2
-			1..8 | ForEach-Object {
-				Pin-AfterlightPlayWindow -ProcessId $still.ProcessId
-				Start-Sleep -Milliseconds 400
-			}
-			Write-Host "OK: Play-in-editor was requested. Preview is pinned to the primary monitor."
-			Write-Host "Click / Space / Enter on the card. Do not minimize the editor."
-		} else {
-			Write-Host "WARN: Auto-PIE was not confirmed in the log. Focus AFTERLIGHT and press Alt+P."
-			Write-Host "Do not minimize the editor. Click the AFTERLIGHT Preview window, then click / Space / Enter on the card."
-		}
-		exit 0
+		Invoke-AfterlightEditorPlay -Profile "play"
+	}
+	"play-safe" {
+		Invoke-AfterlightEditorPlay -Profile "play-safe"
+	}
+	"qa" {
+		Invoke-AfterlightQa -Story 0 -Choice 0 -TimeoutMin 18 -Label "qa"
+	}
+	"qa-story" {
+		Invoke-AfterlightQa -Story 1 -Choice 0 -TimeoutMin 28 -Label "qa-story"
+	}
+	"qa-question" {
+		Invoke-AfterlightQa -Story 1 -Choice 1 -TimeoutMin 28 -Label "qa-question"
 	}
 	"build" {
 		Invoke-AfterlightBuild
@@ -386,7 +552,7 @@ switch ($Command) {
 	}
 	default {
 		Write-Host "FAIL: Unknown command '$Command'."
-		Write-Host "Supported: play, build, test, smoke, verify, all"
+		Write-Host "Supported: play, play-safe, qa, qa-story, qa-question, build, test, smoke, verify, all"
 		exit 1
 	}
 }

@@ -51,6 +51,7 @@ public:
 	void SetAuthority(EAfterlightCameraAuthority NewAuthority);
 	UAfterlightCameraRecipe* GetRecipe(EAfterlightCameraRegister Register) const;
 	void CycleDebugShot();
+	void ForceView(AActor* Target, float BlendTime = 0.f);
 
 private:
 	void EnsureDefaultRecipes();

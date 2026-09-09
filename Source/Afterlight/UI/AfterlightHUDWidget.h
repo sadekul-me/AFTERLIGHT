@@ -54,4 +54,9 @@ private:
 	bool bDialogueVisible = false;
 	bool bDebugVisible = false;
 	bool bHoldCard = false;
+	FName LastSpeakerId = NAME_None;
+	float DialogueOpacity = 0.f;
+	float ChoiceOpacity = 0.f;
+	float DialogueTarget = 0.f;
+	float ChoiceTarget = 0.f;
 };

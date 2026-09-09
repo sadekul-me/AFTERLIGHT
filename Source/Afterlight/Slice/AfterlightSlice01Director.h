@@ -50,9 +50,14 @@ protected:
 	APointLight* SpawnLight(const FVector& Location, const FLinearColor& Color, float Intensity, float Radius);
 	ACineCameraActor* SpawnShot(FName ShotId, const FVector& Location, const FVector& LookAt, uint8 Register);
 	void AimShot(ACineCameraActor* Camera, const FVector& Location, const FVector& LookAt);
+	void HoldShot(ACineCameraActor* Camera, float Blend);
+	void PlayTempVoice(FName SpeakerId, FName VoiceId);
+	void RevealChoices();
 	void RebuildContactShots();
 	void RebuildQuietShot();
 	void RebuildThreatShot();
+	void RebuildTinShot();
+	void RebuildWarningReactionShot();
 	void TryGrantEnteredCut();
 	void ContainPlayer();
 	void MaybeStartCutTalk();
@@ -81,7 +86,7 @@ protected:
 	bool IsPlayerInHide() const;
 	bool IsPlayerNearHide() const;
 	bool ChoseFollow() const;
-	float DialogueDelay(const FText& Line, float OverrideSeconds) const;
+	float DialogueDelay(const FText& Line, float OverrideSeconds);
 	void MaybeScheduleCommandLineSmoke();
 	bool Check(bool bCondition, const TCHAR* Label, FString& OutReport);
 
@@ -137,6 +142,14 @@ protected:
 	UPROPERTY()
 	TObjectPtr<AStaticMeshActor> WarningSlate;
 	UPROPERTY()
+	TObjectPtr<AStaticMeshActor> SlateScan;
+	UPROPERTY()
+	TObjectPtr<AStaticMeshActor> SlateNoise;
+	UPROPERTY()
+	TObjectPtr<AStaticMeshActor> SlateSilhouette;
+	UPROPERTY()
+	TObjectPtr<AStaticMeshActor> WitnessCore;
+	UPROPERTY()
 	TObjectPtr<UAudioComponent> RainBed;
 	UPROPERTY()
 	TObjectPtr<UAudioComponent> HumBed;
@@ -169,6 +182,13 @@ protected:
 	FTimerHandle EndCardHandle;
 	FTimerHandle QaHandle;
 	FTimerHandle QaHandleB;
+	FTimerHandle ChoiceRevealHandle;
+	TArray<FAfterlightDialogueChoice> PendingChoices;
+	FName PendingChoiceSpeaker = NAME_None;
+	FText PendingChoiceLine;
+	float LastVoiceSeconds = 0.f;
+	bool bQaMayaWarnCaptured = false;
+	bool bChoicesVisible = false;
 	bool bQaContactCaptured = false;
 	bool bQaMayaCuCaptured = false;
 	bool bQaChoiceCaptured = false;
@@ -176,6 +196,10 @@ protected:
 	bool bQaDroneCaptured = false;
 	bool bQaWarningCaptured = false;
 	bool bQaEndingCaptured = false;
+	bool bQaHatchCaptured = false;
+	bool bQaQuietCaptured = false;
+	bool bQaTinCaptured = false;
+	bool bQaWitnessCaptured = false;
 	float FpsWindowSeconds = 0.f;
 	int32 FpsWindowFrames = 0;
 
@@ -186,6 +210,7 @@ protected:
 	bool bSweepStarted = false;
 	bool bContactStarted = false;
 	bool bQuietStarted = false;
+	bool bTinStarted = false;
 	bool bWarningStarted = false;
 	bool bTitleStarted = false;
 	bool bHideRecovering = false;
@@ -207,4 +232,5 @@ protected:
 	float WarningPresentElapsed = 0.f;
 	bool bCutTalkPending = false;
 	float CutLeadElapsed = 0.f;
+	float SweepFailElapsed = 0.f;
 };
